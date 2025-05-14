@@ -339,9 +339,9 @@ class Gripper_Controller:
                 start_time = time.time()
                 # get dual hand skeletal point state from XR device
                 with left_gripper_value_in.get_lock():
-                    left_gripper_value  = left_gripper_value_in
+                    left_gripper_value  = left_gripper_value_in.value
                 with right_gripper_value_in.get_lock():
-                    right_gripper_value = right_gripper_value_in
+                    right_gripper_value = right_gripper_value_in.value
 
                 if left_gripper_value != 0.0 or right_gripper_value != 0.0: # if hand data has been initialized.
                     # Linear mapping from [0, THUMB_INDEX_DISTANCE_MAX] to gripper action range
