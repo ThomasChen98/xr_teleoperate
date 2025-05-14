@@ -84,8 +84,9 @@ class G1_29_ArmIK:
         #     frame = self.reduced_robot.model.frames[i]
         #     frame_id = self.reduced_robot.model.getFrameId(frame.name)
         #     print(f"Frame ID: {frame_id}, Name: {frame.name}")
-        for idx, name in enumerate(self.reduced_robot.model.names):
-            print(f"{idx}: {name}")
+        # for idx, name in enumerate(self.reduced_robot.model.names):
+        #     print(f"{idx}: {name}")
+
         # Creating Casadi models and data for symbolic computing
         self.cmodel = cpin.Model(self.reduced_robot.model)
         self.cdata = self.cmodel.createData()

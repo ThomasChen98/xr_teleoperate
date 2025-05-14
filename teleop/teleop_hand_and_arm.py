@@ -2,7 +2,7 @@ import numpy as np
 import time
 import argparse
 import cv2
-from multiprocessing import shared_memory, Array, Lock
+from multiprocessing import shared_memory, Value, Array, Lock
 import threading
 
 import os 
@@ -11,7 +11,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from teleop.open_television.tv_wrapper import TeleVisionWrapper
+from teleop.open_television import TeleVisionWrapper
 from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_Controller
@@ -23,14 +23,15 @@ from teleop.utils.episode_writer import EpisodeWriter
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data', help = 'path to save data')
-    parser.add_argument('--frequency', type = int, default = 30.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
 
     parser.add_argument('--record', action = 'store_true', help = 'Save data or not')
     parser.add_argument('--no-record', dest = 'record', action = 'store_false', help = 'Do not save data')
     parser.set_defaults(record = False)
 
+    parser.add_argument('--xr_mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
-    parser.add_argument('--hand', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select hand controller')
+    parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
 
     args = parser.parse_args()
     print(f"args:{args}\n")
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     image_receive_thread.start()
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, tv_img_shm.name)
+    tv_wrapper = TeleVisionWrapper(BINOCULAR, args.xr_mode == 'hand', tv_img_shape, tv_img_shm.name)
 
     # arm
     if args.arm == 'G1_29':
@@ -93,28 +94,28 @@ if __name__ == '__main__':
         arm_ctrl = H1_ArmController()
         arm_ik = H1_ArmIK()
 
-    # hand
-    if args.hand == "dex3":
-        left_hand_array = Array('d', 75, lock = True)         # [input]
-        right_hand_array = Array('d', 75, lock = True)        # [input]
+    # end-effector
+    if args.ee == "dex3":
+        left_hand_pos_array = Array('d', 75, lock = True)          # [input]
+        right_hand_pos_array = Array('d', 75, lock = True)         # [input]
         dual_hand_data_lock = Lock()
-        dual_hand_state_array = Array('d', 14, lock = False)  # [output] current left, right hand state(14) data.
-        dual_hand_action_array = Array('d', 14, lock = False) # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
-    elif args.hand == "gripper":
-        left_hand_array = Array('d', 75, lock=True)
-        right_hand_array = Array('d', 75, lock=True)
+        dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
+        dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
+        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
+    elif args.ee == "gripper":
+        left_gripper_value = Value('d', 0.0, lock=True)        # [input]
+        right_gripper_value = Value('d', 0.0, lock=True)       # [input]
         dual_gripper_data_lock = Lock()
         dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
         dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
-        gripper_ctrl = Gripper_Controller(left_hand_array, right_hand_array, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array)
-    elif args.hand == "inspire1":
-        left_hand_array = Array('d', 75, lock = True)          # [input]
-        right_hand_array = Array('d', 75, lock = True)         # [input]
+        gripper_ctrl = Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array)
+    elif args.ee == "inspire1":
+        left_hand_pos_array = Array('d', 75, lock = True)          # [input]
+        right_hand_pos_array = Array('d', 75, lock = True)         # [input]
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
         dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-        hand_ctrl = Inspire_Controller(left_hand_array, right_hand_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
+        hand_ctrl = Inspire_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
     else:
         pass
     
@@ -126,16 +127,28 @@ if __name__ == '__main__':
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
             arm_ctrl.speed_gradual_max()
-
             running = True
             while running:
                 start_time = time.time()
-                head_rmat, left_wrist, right_wrist, left_hand, right_hand = tv_wrapper.get_data()
+                tele_data = tv_wrapper.get_motion_state_data()
 
-                # send hand skeleton data to hand_ctrl.control_process
-                if args.hand:
-                    left_hand_array[:] = left_hand.flatten()
-                    right_hand_array[:] = right_hand.flatten()
+                if (args.ee == 'dex3' or args.ee == 'inspire1') and args.xr_mode == 'hand':
+                    with left_hand_pos_array.get_lock():
+                        left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
+                    with right_hand_pos_array.get_lock():
+                        right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
+                elif args.ee == 'gripper' and args.xr_mode == 'controller':
+                    with left_gripper_value.get_lock():
+                        left_gripper_value.value = tele_data.left_trigger_value
+                    with right_gripper_value.get_lock():
+                        right_gripper_value.value = tele_data.right_trigger_value
+                elif args.ee == 'gripper' and args.xr_mode == 'hand':
+                    with left_gripper_value.get_lock():
+                        left_gripper_value.value = tele_data.left_pinch_value
+                    with right_gripper_value.get_lock():
+                        right_gripper_value.value = tele_data.right_pinch_value
+                else:
+                    pass
 
                 # get current state data.
                 current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
@@ -143,7 +156,7 @@ if __name__ == '__main__':
 
                 # solve ik using motor data and wrist pose, then use ik results to control arms.
                 time_ik_start = time.time()
-                sol_q, sol_tauff  = arm_ik.solve_ik(left_wrist, right_wrist, current_lr_arm_q, current_lr_arm_dq)
+                sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
                 time_ik_end = time.time()
                 # print(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
                 arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
@@ -164,27 +177,29 @@ if __name__ == '__main__':
                 # record data
                 if args.record:
                     # dex hand or gripper
-                    if args.hand == "dex3":
+                    if args.ee == "dex3":
                         with dual_hand_data_lock:
                             left_hand_state = dual_hand_state_array[:7]
                             right_hand_state = dual_hand_state_array[-7:]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
-                    elif args.hand == "gripper":
+                    elif args.ee == "gripper":
                         with dual_gripper_data_lock:
                             left_hand_state = [dual_gripper_state_array[1]]
                             right_hand_state = [dual_gripper_state_array[0]]
                             left_hand_action = [dual_gripper_action_array[1]]
                             right_hand_action = [dual_gripper_action_array[0]]
-                    elif args.hand == "inspire1":
+                    elif args.ee == "inspire1":
                         with dual_hand_data_lock:
                             left_hand_state = dual_hand_state_array[:6]
                             right_hand_state = dual_hand_state_array[-6:]
                             left_hand_action = dual_hand_action_array[:6]
                             right_hand_action = dual_hand_action_array[-6:]
                     else:
-                        print("No dexterous hand set.")
-                        pass
+                        left_hand_state = []
+                        right_hand_state = []
+                        left_hand_action = []
+                        right_hand_action = []
                     # head image
                     current_tv_image = tv_img_array.copy()
                     # wrist image
@@ -195,7 +210,6 @@ if __name__ == '__main__':
                     right_arm_state = current_lr_arm_q[-7:]
                     left_arm_action = sol_q[:7]
                     right_arm_action = sol_q[-7:]
-
                     if recording:
                         colors = {}
                         depths = {}
@@ -221,12 +235,12 @@ if __name__ == '__main__':
                                 "qvel":   [],                          
                                 "torque": [],                         
                             },                        
-                            "left_hand": {                                                                    
+                            "left_hand_pos": {                                                                    
                                 "qpos":   left_hand_state,           
                                 "qvel":   [],                           
                                 "torque": [],                          
                             }, 
-                            "right_hand": {                                                                    
+                            "right_hand_pos": {                                                                    
                                 "qpos":   right_hand_state,       
                                 "qvel":   [],                           
                                 "torque": [],  
@@ -244,12 +258,12 @@ if __name__ == '__main__':
                                 "qvel":   [],       
                                 "torque": [],       
                             },                         
-                            "left_hand": {                                   
+                            "left_hand_pos": {                                   
                                 "qpos":   left_hand_action,       
                                 "qvel":   [],       
                                 "torque": [],       
                             }, 
-                            "right_hand": {                                   
+                            "right_hand_pos": {                                   
                                 "qpos":   right_hand_action,       
                                 "qvel":   [],       
                                 "torque": [], 
@@ -260,7 +274,7 @@ if __name__ == '__main__':
 
                 current_time = time.time()
                 time_elapsed = current_time - start_time
-                sleep_time = max(0, (1 / float(args.frequency)) - time_elapsed)
+                sleep_time = max(0, (1 / args.frequency) - time_elapsed)
                 time.sleep(sleep_time)
                 # print(f"main process sleep: {sleep_time}")
 

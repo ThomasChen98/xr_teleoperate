@@ -30,20 +30,20 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 
 class Dex3_1_Controller:
-    def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
-                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False):
+    def __init__(self, left_hand_array_in, right_hand_array_in, dual_hand_data_lock = None, dual_hand_state_array_out = None,
+                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
-        left_hand_array: [input] Left hand skeleton data (required from XR device) to hand_ctrl.control_process
+        left_hand_array_in: [input] Left hand skeleton data (required from XR device) to hand_ctrl.control_process
 
-        right_hand_array: [input] Right hand skeleton data (required from XR device) to hand_ctrl.control_process
+        right_hand_array_in: [input] Right hand skeleton data (required from XR device) to hand_ctrl.control_process
 
         dual_hand_data_lock: Data synchronization lock for dual_hand_state_array and dual_hand_action_array
 
-        dual_hand_state_array: [output] Return left(7), right(7) hand motor state
+        dual_hand_state_array_out: [output] Return left(7), right(7) hand motor state
 
-        dual_hand_action_array: [output] Return left(7), right(7) hand motor action
+        dual_hand_action_array_out: [output] Return left(7), right(7) hand motor action
 
         fps: Control frequency
 
@@ -85,8 +85,8 @@ class Dex3_1_Controller:
             time.sleep(0.01)
             print("[Dex3_1_Controller] Waiting to subscribe dds...")
 
-        hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
-                                                                          dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))
+        hand_control_process = Process(target=self.control_process, args=(left_hand_array_in, right_hand_array_in,  self.left_hand_state_array, self.right_hand_state_array,
+                                                                          dual_hand_data_lock, dual_hand_state_array_out, dual_hand_action_array_out))
         hand_control_process.daemon = True
         hand_control_process.start()
 
@@ -129,8 +129,8 @@ class Dex3_1_Controller:
         self.RightHandCmb_publisher.Write(self.right_msg)
         # print("hand ctrl publish ok.")
     
-    def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
-                              dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
+    def control_process(self, left_hand_array_in, right_hand_array_in, left_hand_state_array, right_hand_state_array,
+                              dual_hand_data_lock = None, dual_hand_state_array_out = None, dual_hand_action_array_out = None):
         self.running = True
 
         left_q_target  = np.full(Dex3_Num_Motors, 0)
@@ -170,15 +170,17 @@ class Dex3_1_Controller:
             while self.running:
                 start_time = time.time()
                 # get dual hand state
-                left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy()
-                right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy()
+                with left_hand_array_in.get_lock():
+                    left_hand_data  = np.array(left_hand_array_in[:]).reshape(25, 3).copy()
+                with right_hand_array_in.get_lock():
+                    right_hand_data = np.array(right_hand_array_in[:]).reshape(25, 3).copy()
 
                 # Read left and right q_state from shared arrays
                 state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
 
-                if not np.all(right_hand_mat == 0.0) and not np.all(left_hand_mat[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    ref_left_value = left_hand_mat[unitree_tip_indices]
-                    ref_right_value = right_hand_mat[unitree_tip_indices]
+                if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
+                    ref_left_value = left_hand_data[unitree_tip_indices]
+                    ref_right_value = right_hand_data[unitree_tip_indices]
                     ref_left_value[0] = ref_left_value[0] * 1.15
                     ref_left_value[1] = ref_left_value[1] * 1.05
                     ref_left_value[2] = ref_left_value[2] * 0.95
@@ -191,10 +193,10 @@ class Dex3_1_Controller:
 
                 # get dual hand action
                 action_data = np.concatenate((left_q_target, right_q_target))    
-                if dual_hand_state_array and dual_hand_action_array:
+                if dual_hand_state_array_out and dual_hand_action_array_out:
                     with dual_hand_data_lock:
-                        dual_hand_state_array[:] = state_data
-                        dual_hand_action_array[:] = action_data
+                        dual_hand_state_array_out[:] = state_data
+                        dual_hand_action_array_out[:] = action_data
 
                 self.ctrl_dual_hand(left_q_target, right_q_target)
                 current_time = time.time()
@@ -229,20 +231,20 @@ kTopicGripperCommand = "rt/unitree_actuator/cmd"
 kTopicGripperState = "rt/unitree_actuator/state"
 
 class Gripper_Controller:
-    def __init__(self, left_hand_array, right_hand_array, dual_gripper_data_lock = None, dual_gripper_state_out = None, dual_gripper_action_out = None, 
+    def __init__(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_data_lock = None, dual_gripper_state_out = None, dual_gripper_action_out = None, 
                        filter = True, fps = 200.0, Unit_Test = False):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
-        left_hand_array: [input] Left hand skeleton data (required from XR device) to control_thread
+        left_gripper_value_in: [input] Left ctrl data (required from XR device) to control_thread
 
-        right_hand_array: [input] Right hand skeleton data (required from XR device) to control_thread
+        right_gripper_value_in: [input] Right ctrl data (required from XR device) to control_thread
 
         dual_gripper_data_lock: Data synchronization lock for dual_gripper_state_array and dual_gripper_action_array
 
-        dual_gripper_state: [output] Return left(1), right(1) gripper motor state
+        dual_gripper_state_out: [output] Return left(1), right(1) gripper motor state
 
-        dual_gripper_action: [output] Return left(1), right(1) gripper motor action
+        dual_gripper_action_out: [output] Return left(1), right(1) gripper motor action
 
         fps: Control frequency
 
@@ -281,7 +283,7 @@ class Gripper_Controller:
             time.sleep(0.01)
             print("[Gripper_Controller] Waiting to subscribe dds...")
 
-        self.gripper_control_thread = threading.Thread(target=self.control_thread, args=(left_hand_array, right_hand_array, self.dual_gripper_state,
+        self.gripper_control_thread = threading.Thread(target=self.control_thread, args=(left_gripper_value_in, right_gripper_value_in, self.dual_gripper_state,
                                                                                          dual_gripper_data_lock, dual_gripper_state_out, dual_gripper_action_out))
         self.gripper_control_thread.daemon = True
         self.gripper_control_thread.start()
@@ -304,13 +306,13 @@ class Gripper_Controller:
         self.GripperCmb_publisher.Write(self.gripper_msg)
         # print("gripper ctrl publish ok.")
     
-    def control_thread(self, left_hand_array, right_hand_array, dual_gripper_state_in, dual_hand_data_lock = None, 
+    def control_thread(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_state_in, dual_hand_data_lock = None, 
                              dual_gripper_state_out = None, dual_gripper_action_out = None):
         self.running = True
 
         DELTA_GRIPPER_CMD = 0.18         # The motor rotates 5.4 radians, the clamping jaw slide open 9 cm, so 0.6 rad <==> 1 cm, 0.18 rad <==> 3 mm
-        THUMB_INDEX_DISTANCE_MIN = 0.05  # Assuming a minimum Euclidean distance is 5 cm between thumb and index.
-        THUMB_INDEX_DISTANCE_MAX = 0.07  # Assuming a maximum Euclidean distance is 9 cm between thumb and index.
+        THUMB_INDEX_DISTANCE_MIN = 5.0
+        THUMB_INDEX_DISTANCE_MAX = 7.0
         LEFT_MAPPED_MIN  = 0.0           # The minimum initial motor position when the gripper closes at startup.
         RIGHT_MAPPED_MIN = 0.0           # The minimum initial motor position when the gripper closes at startup.
         # The maximum initial motor position when the gripper closes before calibration (with the rail stroke calculated as 0.6 cm/rad * 9 rad = 5.4 cm).
@@ -336,15 +338,15 @@ class Gripper_Controller:
             while self.running:
                 start_time = time.time()
                 # get dual hand skeletal point state from XR device
-                left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy()
-                right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy()
+                with left_gripper_value_in.get_lock():
+                    left_gripper_value  = left_gripper_value_in
+                with right_gripper_value_in.get_lock():
+                    right_gripper_value = right_gripper_value_in
 
-                if not np.all(right_hand_mat == 0.0) and not np.all(left_hand_mat[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    left_euclidean_distance  = np.linalg.norm(left_hand_mat[unitree_gripper_indices[1]] - left_hand_mat[unitree_gripper_indices[0]])
-                    right_euclidean_distance = np.linalg.norm(right_hand_mat[unitree_gripper_indices[1]] - right_hand_mat[unitree_gripper_indices[0]])
+                if left_gripper_value != 0.0 or right_gripper_value != 0.0: # if hand data has been initialized.
                     # Linear mapping from [0, THUMB_INDEX_DISTANCE_MAX] to gripper action range
-                    left_target_action  = np.interp(left_euclidean_distance, [THUMB_INDEX_DISTANCE_MIN, THUMB_INDEX_DISTANCE_MAX], [LEFT_MAPPED_MIN, LEFT_MAPPED_MAX])
-                    right_target_action = np.interp(right_euclidean_distance, [THUMB_INDEX_DISTANCE_MIN, THUMB_INDEX_DISTANCE_MAX], [RIGHT_MAPPED_MIN, RIGHT_MAPPED_MAX])
+                    left_target_action  = np.interp(left_gripper_value, [THUMB_INDEX_DISTANCE_MIN, THUMB_INDEX_DISTANCE_MAX], [LEFT_MAPPED_MIN, LEFT_MAPPED_MAX])
+                    right_target_action = np.interp(right_gripper_value, [THUMB_INDEX_DISTANCE_MIN, THUMB_INDEX_DISTANCE_MAX], [RIGHT_MAPPED_MIN, RIGHT_MAPPED_MAX])
                 # else: # TEST WITHOUT XR DEVICE
                 #     current_time = time.time()
                 #     period = 2.5

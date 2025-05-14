@@ -98,8 +98,10 @@ class Inspire_Controller:
             while self.running:
                 start_time = time.time()
                 # get dual hand state
-                left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy()
-                right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy()
+                with left_hand_array.get_lock():
+                    left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy()
+                with right_hand_array.get_lock():
+                    right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy()
 
                 # Read left and right q_state from shared arrays
                 state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
