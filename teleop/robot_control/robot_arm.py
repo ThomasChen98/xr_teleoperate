@@ -11,8 +11,10 @@ from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import ( LowCmd_  as go_LowCmd, LowState_ as go_LowState)  # idl for h1
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
 
-kTopicLowCommand = "rt/lowcmd"
+# kTopicLowCommand = "rt/lowcmd"
 kTopicLowState = "rt/lowstate"
+kTopicLowCommand = "rt/arm_sdk"
+
 G1_29_Num_Motors = 35
 G1_23_Num_Motors = 35
 H1_2_Num_Motors = 35
@@ -149,6 +151,8 @@ class G1_29_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
+        self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
+
         while True:
             start_time = time.time()
 
@@ -209,6 +213,9 @@ class G1_29_ArmController:
         while True:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
+                for weight in np.arange(1, 0, -0.01):
+                    self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
+                    time.sleep(0.02)
                 print("[G1_29_ArmController] both arms have reached the home position.")
                 break
             time.sleep(0.05)

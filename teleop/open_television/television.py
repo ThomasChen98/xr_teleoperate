@@ -193,27 +193,9 @@ class TeleVision:
     
     async def main_image_binocular(self, session, fps=60):
         if self.use_hand_tracking:
-            session.upsert(
-                Hands(
-                    stream=True,
-                    key="hands",
-                    showLeft=False,
-                    showRight=False
-                ),
-                # we place this into the background children list, so that it is
-                # not affected by the global rotation
-                to="bgChildren",
-            )
+            session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
         else:
-            session.upsert(
-                MotionControllers(
-                    stream=True, 
-                    key="motion-controller",
-                    showLeft=False,
-                    showRight=False,
-                ),
-                to="bgChildren",
-            )
+            session.upsert @ MotionControllers(fps=fps, stream=True, key="motion-controller", showLeft=False, showRight=False)
 
         while True:
             display_image = cv2.cvtColor(self.img_array, cv2.COLOR_BGR2RGB)
@@ -230,7 +212,7 @@ class TeleVision:
                         # Note that these two masks are associated with left eye’s camera and the right eye’s camera.
                         layers=1,
                         format="jpeg",
-                        quality=50,
+                        quality=90,
                         key="background-left",
                         interpolate=True,
                     ),
@@ -241,7 +223,7 @@ class TeleVision:
                         distanceToCamera=1,
                         layers=2,
                         format="jpeg",
-                        quality=50,
+                        quality=90,
                         key="background-right",
                         interpolate=True,
                     ),
@@ -253,25 +235,10 @@ class TeleVision:
 
     async def main_image_monocular(self, session, fps=60):
         if self.use_hand_tracking:
-            session.upsert(
-                Hands(
-                    stream=True,
-                    key="hands",
-                    showLeft=False,
-                    showRight=False
-                ),
-                to="bgChildren",
-            )
+            session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
         else:
-            session.upsert(
-                MotionControllers(
-                    stream=True, 
-                    key="motion-controller",
-                    showLeft=False,
-                    showRight=False,
-                ),
-                to="bgChildren",
-            )
+            session.upsert @ MotionControllers(fps=fps, stream=True, key="motion-controller", showLeft=False, showRight=False)
+
         while True:
             display_image = cv2.cvtColor(self.img_array, cv2.COLOR_BGR2RGB)
             # aspect_ratio = self.img_width / self.img_height

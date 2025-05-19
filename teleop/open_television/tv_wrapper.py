@@ -1,5 +1,5 @@
 import numpy as np
-from open_television.television import TeleVision
+from television import TeleVision
 from dataclasses import dataclass, field
 
 """

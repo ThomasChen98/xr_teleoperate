@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-record', dest = 'record', action = 'store_false', help = 'Do not save data')
     parser.set_defaults(record = False)
 
-    parser.add_argument('--xr_mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
+    parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
 
@@ -118,6 +118,13 @@ if __name__ == '__main__':
         hand_ctrl = Inspire_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
     else:
         pass
+
+    # xr mode
+    if args.xr_mode == 'controller':
+        from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+        sport_client = LocoClient()  
+        sport_client.SetTimeout(0.0001)
+        sport_client.Init()
     
     if args.record:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
@@ -142,6 +149,15 @@ if __name__ == '__main__':
                         left_gripper_value.value = tele_data.left_trigger_value
                     with right_gripper_value.get_lock():
                         right_gripper_value.value = tele_data.right_trigger_value
+                    # quit or damp
+                    if tele_data.tele_state.right_aButton:
+                        running = False
+                    if tele_data.tele_state.right_thumbstick_state:
+                        sport_client.Damp()
+                    # control
+                    sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
+                                      -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                      -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
                 elif args.ee == 'gripper' and args.xr_mode == 'hand':
                     with left_gripper_value.get_lock():
                         left_gripper_value.value = tele_data.left_pinch_value
@@ -177,19 +193,29 @@ if __name__ == '__main__':
                 # record data
                 if args.record:
                     # dex hand or gripper
-                    if args.ee == "dex3":
+                    if args.ee == "dex3" and args.xr_mode == 'hand':
                         with dual_hand_data_lock:
                             left_hand_state = dual_hand_state_array[:7]
                             right_hand_state = dual_hand_state_array[-7:]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
-                    elif args.ee == "gripper":
+                    elif args.ee == "gripper" and args.xr_mode == 'hand':
                         with dual_gripper_data_lock:
                             left_hand_state = [dual_gripper_state_array[1]]
                             right_hand_state = [dual_gripper_state_array[0]]
                             left_hand_action = [dual_gripper_action_array[1]]
                             right_hand_action = [dual_gripper_action_array[0]]
-                    elif args.ee == "inspire1":
+                    elif args.ee == "gripper" and args.xr_mode == 'controller':
+                        with dual_gripper_data_lock:
+                            left_hand_state = [dual_gripper_state_array[1]]
+                            right_hand_state = [dual_gripper_state_array[0]]
+                            left_hand_action = [dual_gripper_action_array[1]]
+                            right_hand_action = [dual_gripper_action_array[0]]
+                            current_body_state = arm_ctrl.get_current_motor_q().tolist()
+                            current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
+                                                   -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                                   -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
+                    elif args.ee == "inspire1" and args.xr_mode == 'hand':
                         with dual_hand_data_lock:
                             left_hand_state = dual_hand_state_array[:6]
                             right_hand_state = dual_hand_state_array[-6:]
@@ -200,6 +226,8 @@ if __name__ == '__main__':
                         right_hand_state = []
                         left_hand_action = []
                         right_hand_action = []
+                        current_body_state = []
+                        current_body_action = []
                     # head image
                     current_tv_image = tv_img_array.copy()
                     # wrist image
@@ -245,7 +273,9 @@ if __name__ == '__main__':
                                 "qvel":   [],                           
                                 "torque": [],  
                             }, 
-                            "body": None, 
+                            "body": {
+                                "qpos": current_body_state,
+                            }, 
                         }
                         actions = {
                             "left_arm": {                                   
@@ -268,7 +298,9 @@ if __name__ == '__main__':
                                 "qvel":   [],       
                                 "torque": [], 
                             }, 
-                            "body": None, 
+                            "body": {
+                                "qpos": current_body_action,
+                            }, 
                         }
                         recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
 
