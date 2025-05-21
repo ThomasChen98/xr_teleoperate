@@ -78,7 +78,8 @@ if __name__ == '__main__':
     image_receive_thread.start()
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVisionWrapper(BINOCULAR, args.xr_mode == 'hand', tv_img_shape, tv_img_shm.name)
+    tv_wrapper = TeleVisionWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == 'hand', img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
+                                   return_state_data=True, return_hand_rot_data = False)
 
     # arm
     if args.arm == 'G1_29':
@@ -96,8 +97,8 @@ if __name__ == '__main__':
 
     # end-effector
     if args.ee == "dex3":
-        left_hand_pos_array = Array('d', 75, lock = True)          # [input]
-        right_hand_pos_array = Array('d', 75, lock = True)         # [input]
+        left_hand_pos_array = Array('d', 75, lock = True)      # [input]
+        right_hand_pos_array = Array('d', 75, lock = True)     # [input]
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
@@ -110,8 +111,8 @@ if __name__ == '__main__':
         dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
         gripper_ctrl = Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array)
     elif args.ee == "inspire1":
-        left_hand_pos_array = Array('d', 75, lock = True)          # [input]
-        right_hand_pos_array = Array('d', 75, lock = True)         # [input]
+        left_hand_pos_array = Array('d', 75, lock = True)      # [input]
+        right_hand_pos_array = Array('d', 75, lock = True)     # [input]
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
         dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
@@ -122,7 +123,7 @@ if __name__ == '__main__':
     # xr mode
     if args.xr_mode == 'controller':
         from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
-        sport_client = LocoClient()  
+        sport_client = LocoClient()
         sport_client.SetTimeout(0.0001)
         sport_client.Init()
     
@@ -137,46 +138,8 @@ if __name__ == '__main__':
             running = True
             while running:
                 start_time = time.time()
-                tele_data = tv_wrapper.get_motion_state_data()
 
-                if (args.ee == 'dex3' or args.ee == 'inspire1') and args.xr_mode == 'hand':
-                    with left_hand_pos_array.get_lock():
-                        left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
-                    with right_hand_pos_array.get_lock():
-                        right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
-                elif args.ee == 'gripper' and args.xr_mode == 'controller':
-                    with left_gripper_value.get_lock():
-                        left_gripper_value.value = tele_data.left_trigger_value
-                    with right_gripper_value.get_lock():
-                        right_gripper_value.value = tele_data.right_trigger_value
-                    # quit or damp
-                    if tele_data.tele_state.right_aButton:
-                        running = False
-                    if tele_data.tele_state.right_thumbstick_state:
-                        sport_client.Damp()
-                    # control
-                    sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                      -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                      -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
-                elif args.ee == 'gripper' and args.xr_mode == 'hand':
-                    with left_gripper_value.get_lock():
-                        left_gripper_value.value = tele_data.left_pinch_value
-                    with right_gripper_value.get_lock():
-                        right_gripper_value.value = tele_data.right_pinch_value
-                else:
-                    pass
-
-                # get current state data.
-                current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
-                current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
-
-                # solve ik using motor data and wrist pose, then use ik results to control arms.
-                time_ik_start = time.time()
-                sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
-                time_ik_end = time.time()
-                # print(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
-                arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
-
+                # opencv image
                 tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
@@ -189,6 +152,47 @@ if __name__ == '__main__':
                             recording = False
                     else:
                         recorder.save_episode()
+
+                # get input data
+                tele_data = tv_wrapper.get_motion_state_data()
+                if (args.ee == 'dex3' or args.ee == 'inspire1') and args.xr_mode == 'hand':
+                    with left_hand_pos_array.get_lock():
+                        left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
+                    with right_hand_pos_array.get_lock():
+                        right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
+                elif args.ee == 'gripper' and args.xr_mode == 'controller':
+                    with left_gripper_value.get_lock():
+                        left_gripper_value.value = tele_data.left_trigger_value
+                    with right_gripper_value.get_lock():
+                        right_gripper_value.value = tele_data.right_trigger_value
+                    # quit teleoperate
+                    if tele_data.tele_state.right_aButton:
+                        running = False
+                    # command robot to enter damping mode. soft emergency stop function
+                    if tele_data.tele_state.left_thumbstick_state and tele_data.tele_state.right_thumbstick_state:
+                        sport_client.Damp()
+                    # high level control, limit velocity to within 0.3
+                    sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
+                                      -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                      -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
+                elif args.ee == 'gripper' and args.xr_mode == 'hand':
+                    with left_gripper_value.get_lock():
+                        left_gripper_value.value = tele_data.left_pinch_value
+                    with right_gripper_value.get_lock():
+                        right_gripper_value.value = tele_data.right_pinch_value
+                else:
+                    pass
+
+                # get current robot state data.
+                current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
+                current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
+
+                # solve ik using motor data and wrist pose, then use ik results to control arms.
+                time_ik_start = time.time()
+                sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
+                time_ik_end = time.time()
+                # print(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
+                arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
                 # record data
                 if args.record:

@@ -15,9 +15,16 @@ def run_test_television():
     image_shm = shared_memory.SharedMemory(create=True, size=np.prod(image_shape) * np.uint8().itemsize)
     image_array = np.ndarray(image_shape, dtype=np.uint8, buffer=image_shm.buf)
 
+    # from image_server.image_client import ImageClient
+    # import threading
+    # image_client = ImageClient(tv_img_shape = image_shape, tv_img_shm_name = image_shm.name, image_show=True, server_address="127.0.0.1")
+    # image_receive_thread = threading.Thread(target = image_client.receive_process, daemon = True)
+    # image_receive_thread.daemon = True
+    # image_receive_thread.start()
+
     # television
-    use_hand_track = False
-    tv = TeleVision(binocular = True, use_hand_tracking = use_hand_track, img_shape = image_shape, img_shm_name = image_shm.name, webrtc=True)
+    use_hand_track = True
+    tv = TeleVision(binocular = True, use_hand_tracking = use_hand_track, img_shape = image_shape, img_shm_name = image_shm.name, webrtc=False)
 
     try:
         input("Press Enter to start television test...")

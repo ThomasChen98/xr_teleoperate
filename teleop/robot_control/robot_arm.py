@@ -11,9 +11,9 @@ from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import ( LowCmd_  as go_LowCmd, LowState_ as go_LowState)  # idl for h1
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
 
-# kTopicLowCommand = "rt/lowcmd"
+kTopicLowCommand_Debug  = "rt/lowcmd"
+kTopicLowCommand_Motion = "rt/arm_sdk"
 kTopicLowState = "rt/lowstate"
-kTopicLowCommand = "rt/arm_sdk"
 
 G1_29_Num_Motors = 35
 G1_23_Num_Motors = 35
@@ -56,10 +56,11 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self):
+    def __init__(self, debug_mode = True):
         print("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
+        self.debug_mode = debug_mode
 
         self.kp_high = 300.0
         self.kd_high = 3.0
@@ -78,7 +79,10 @@ class G1_29_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, hg_LowCmd)
+        if self.debug_mode:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
+        else:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -151,7 +155,8 @@ class G1_29_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
-        self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
+        if self.debug_mode:
+            self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
 
         while True:
             start_time = time.time()
@@ -165,7 +170,7 @@ class G1_29_ArmController:
             for idx, id in enumerate(G1_29_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
                 self.msg.motor_cmd[id].dq = 0
-                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]      
+                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]   
 
             self.msg.crc = self.crc.Crc(self.msg)
             self.lowcmd_publisher.Write(self.msg)
@@ -213,9 +218,10 @@ class G1_29_ArmController:
         while True:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                for weight in np.arange(1, 0, -0.01):
-                    self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
-                    time.sleep(0.02)
+                if self.debug_mode:
+                    for weight in np.arange(1, 0, -0.01):
+                        self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
+                        time.sleep(0.02)
                 print("[G1_29_ArmController] both arms have reached the home position.")
                 break
             time.sleep(0.05)
@@ -347,7 +353,7 @@ class G1_23_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, hg_LowCmd)
+        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -603,7 +609,7 @@ class H1_2_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, hg_LowCmd)
+        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -864,7 +870,7 @@ class H1_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, go_LowCmd)
+        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, go_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, go_LowState)
         self.lowstate_subscriber.Init()

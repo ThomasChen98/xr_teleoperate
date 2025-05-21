@@ -30,7 +30,6 @@ class TeleVision:
             self.img_width  = img_shape[1]
         
         current_module_dir = os.path.dirname(os.path.abspath(__file__))
-        print(f"current_module_dir: {current_module_dir}")
         if cert_file is None:
             cert_file = os.path.join(current_module_dir, "cert.pem")
         if key_file is None:
@@ -193,9 +192,25 @@ class TeleVision:
     
     async def main_image_binocular(self, session, fps=60):
         if self.use_hand_tracking:
-            session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+            session.upsert(
+                Hands(
+                    stream=True,
+                    key="hands",
+                    showLeft=False,
+                    showRight=False
+                ),
+                to="bgChildren",
+            )
         else:
-            session.upsert @ MotionControllers(fps=fps, stream=True, key="motion-controller", showLeft=False, showRight=False)
+            session.upsert(
+                MotionControllers(
+                    stream=True,
+                    key="motionControllers",
+                    showLeft=False,
+                    showRight=False,
+                ),
+                to="bgChildren",
+            )
 
         while True:
             display_image = cv2.cvtColor(self.img_array, cv2.COLOR_BGR2RGB)
@@ -212,7 +227,7 @@ class TeleVision:
                         # Note that these two masks are associated with left eye’s camera and the right eye’s camera.
                         layers=1,
                         format="jpeg",
-                        quality=90,
+                        quality=100,
                         key="background-left",
                         interpolate=True,
                     ),
@@ -223,7 +238,7 @@ class TeleVision:
                         distanceToCamera=1,
                         layers=2,
                         format="jpeg",
-                        quality=90,
+                        quality=100,
                         key="background-right",
                         interpolate=True,
                     ),
@@ -235,9 +250,25 @@ class TeleVision:
 
     async def main_image_monocular(self, session, fps=60):
         if self.use_hand_tracking:
-            session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+            session.upsert(
+                Hands(
+                    stream=True,
+                    key="hands",
+                    showLeft=False,
+                    showRight=False
+                ),
+                to="bgChildren",
+            )
         else:
-            session.upsert @ MotionControllers(fps=fps, stream=True, key="motion-controller", showLeft=False, showRight=False)
+            session.upsert(
+                MotionControllers(
+                    stream=True, 
+                    key="motionControllers",
+                    showLeft=False,
+                    showRight=False,
+                ),
+                to="bgChildren",
+            )
 
         while True:
             display_image = cv2.cvtColor(self.img_array, cv2.COLOR_BGR2RGB)
@@ -274,7 +305,7 @@ class TeleVision:
             session.upsert(
                 MotionControllers(
                     stream=True, 
-                    key="motion-controller",
+                    key="motionControllers",
                     showLeft=False,
                     showRight=False,
                 )

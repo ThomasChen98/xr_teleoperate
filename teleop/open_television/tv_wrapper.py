@@ -182,7 +182,7 @@ class TeleData:
 
 class TeleVisionWrapper:
     def __init__(self, binocular: bool, use_hand_tracking: bool, img_shape, img_shm_name, return_state_data: bool = True, return_hand_rot_data: bool = False,
-                       cert_file = None, key_file = None):
+                       cert_file = None, key_file = None, ngrok = False, webrtc = False):
         """
         TeleVisionWrapper is a wrapper for the TeleVision class, which handles XR device's data suit for robot control.
         It initializes the TeleVision instance with the specified parameters and provides a method to get motion state data.
@@ -199,7 +199,8 @@ class TeleVisionWrapper:
         self.use_hand_tracking = use_hand_tracking
         self.return_state_data = return_state_data
         self.return_hand_rot_data = return_hand_rot_data
-        self.tvuer = TeleVision(binocular, use_hand_tracking, img_shape, img_shm_name, cert_file=cert_file, key_file=key_file)
+        self.tvuer = TeleVision(binocular, use_hand_tracking, img_shape, img_shm_name, cert_file=cert_file, key_file=key_file,
+                                ngrok=ngrok, webrtc=webrtc)
     
     def get_motion_state_data(self):
         """
