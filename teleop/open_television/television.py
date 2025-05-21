@@ -196,8 +196,8 @@ class TeleVision:
                 Hands(
                     stream=True,
                     key="hands",
-                    showLeft=False,
-                    showRight=False
+                    hideLeft=True,
+                    hideRight=True
                 ),
                 to="bgChildren",
             )
@@ -254,8 +254,8 @@ class TeleVision:
                 Hands(
                     stream=True,
                     key="hands",
-                    showLeft=False,
-                    showRight=False
+                    hideLeft=True,
+                    hideRight=True
                 ),
                 to="bgChildren",
             )
