@@ -23,7 +23,7 @@ from teleop.utils.episode_writer import EpisodeWriter
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data', help = 'path to save data')
-    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 90.0, help = 'save data\'s frequency')
 
     parser.add_argument('--record', action = 'store_true', help = 'Save data or not')
     parser.add_argument('--no-record', dest = 'record', action = 'store_false', help = 'Do not save data')
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     # arm
     if args.arm == 'G1_29':
-        arm_ctrl = G1_29_ArmController()
+        arm_ctrl = G1_29_ArmController(debug_mode=True)
         arm_ik = G1_29_ArmIK()
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController()
@@ -203,12 +203,16 @@ if __name__ == '__main__':
                             right_hand_state = dual_hand_state_array[-7:]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
+                            current_body_state = []
+                            current_body_action = []
                     elif args.ee == "gripper" and args.xr_mode == 'hand':
                         with dual_gripper_data_lock:
                             left_hand_state = [dual_gripper_state_array[1]]
                             right_hand_state = [dual_gripper_state_array[0]]
                             left_hand_action = [dual_gripper_action_array[1]]
                             right_hand_action = [dual_gripper_action_array[0]]
+                            current_body_state = []
+                            current_body_action = []
                     elif args.ee == "gripper" and args.xr_mode == 'controller':
                         with dual_gripper_data_lock:
                             left_hand_state = [dual_gripper_state_array[1]]
@@ -225,6 +229,8 @@ if __name__ == '__main__':
                             right_hand_state = dual_hand_state_array[-6:]
                             left_hand_action = dual_hand_action_array[:6]
                             right_hand_action = dual_hand_action_array[-6:]
+                            current_body_state = []
+                            current_body_action = []
                     else:
                         left_hand_state = []
                         right_hand_state = []
@@ -267,12 +273,12 @@ if __name__ == '__main__':
                                 "qvel":   [],                          
                                 "torque": [],                         
                             },                        
-                            "left_hand_pos": {                                                                    
+                            "left_hand": {                                                                    
                                 "qpos":   left_hand_state,           
                                 "qvel":   [],                           
                                 "torque": [],                          
                             }, 
-                            "right_hand_pos": {                                                                    
+                            "right_hand": {                                                                    
                                 "qpos":   right_hand_state,       
                                 "qvel":   [],                           
                                 "torque": [],  
@@ -292,12 +298,12 @@ if __name__ == '__main__':
                                 "qvel":   [],       
                                 "torque": [],       
                             },                         
-                            "left_hand_pos": {                                   
+                            "left_hand": {                                   
                                 "qpos":   left_hand_action,       
                                 "qvel":   [],       
                                 "torque": [],       
                             }, 
-                            "right_hand_pos": {                                   
+                            "right_hand": {                                   
                                 "qpos":   right_hand_action,       
                                 "qvel":   [],       
                                 "torque": [], 

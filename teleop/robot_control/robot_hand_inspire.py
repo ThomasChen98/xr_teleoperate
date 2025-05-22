@@ -147,7 +147,7 @@ class Inspire_Controller:
                 sleep_time = max(0, (1 / self.fps) - time_elapsed)
                 time.sleep(sleep_time)
         finally:
-            print("Dex3_1_Controller has been closed.")
+            print("Inspire_Controller has been closed.")
 
 # Update hand state, according to the official documentation, https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand
 # the state sequence is as shown in the table below
