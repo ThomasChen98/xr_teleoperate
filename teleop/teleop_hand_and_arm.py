@@ -33,6 +33,10 @@ if __name__ == '__main__':
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
 
+    parser.add_argument('--debug', action = 'store_true', help = 'debug mode')
+    parser.add_argument('--no-debug', dest = 'debug', action = 'store_false', help = 'motion mode')
+    parser.set_defaults(debug = True)
+
     args = parser.parse_args()
     print(f"args:{args}\n")
 
@@ -83,7 +87,7 @@ if __name__ == '__main__':
 
     # arm
     if args.arm == 'G1_29':
-        arm_ctrl = G1_29_ArmController(debug_mode=True)
+        arm_ctrl = G1_29_ArmController(debug_mode=args.debug)
         arm_ik = G1_29_ArmIK()
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController()
@@ -121,7 +125,7 @@ if __name__ == '__main__':
         pass
 
     # xr mode
-    if args.xr_mode == 'controller':
+    if args.xr_mode == 'controller' and not args.debug:
         from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
         sport_client = LocoClient()
         sport_client.SetTimeout(0.0001)
@@ -165,16 +169,6 @@ if __name__ == '__main__':
                         left_gripper_value.value = tele_data.left_trigger_value
                     with right_gripper_value.get_lock():
                         right_gripper_value.value = tele_data.right_trigger_value
-                    # quit teleoperate
-                    if tele_data.tele_state.right_aButton:
-                        running = False
-                    # command robot to enter damping mode. soft emergency stop function
-                    if tele_data.tele_state.left_thumbstick_state and tele_data.tele_state.right_thumbstick_state:
-                        sport_client.Damp()
-                    # high level control, limit velocity to within 0.3
-                    sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                      -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                      -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
                 elif args.ee == 'gripper' and args.xr_mode == 'hand':
                     with left_gripper_value.get_lock():
                         left_gripper_value.value = tele_data.left_pinch_value
@@ -182,6 +176,19 @@ if __name__ == '__main__':
                         right_gripper_value.value = tele_data.right_pinch_value
                 else:
                     pass
+                
+                # high level control
+                if args.xr_mode == 'controller' and not args.debug:
+                    # quit teleoperate
+                    if tele_data.tele_state.right_aButton:
+                        running = False
+                    # command robot to enter damping mode. soft emergency stop function
+                    if tele_data.tele_state.left_thumbstick_state and tele_data.tele_state.right_thumbstick_state:
+                        sport_client.Damp()
+                    # control, limit velocity to within 0.3
+                    sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
+                                      -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                      -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
 
                 # get current robot state data.
                 current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()

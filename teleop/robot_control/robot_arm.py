@@ -155,7 +155,7 @@ class G1_29_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
-        if self.debug_mode:
+        if not self.debug_mode:
             self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
 
         while True:
@@ -218,7 +218,7 @@ class G1_29_ArmController:
         while True:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                if self.debug_mode:
+                if not self.debug_mode:
                     for weight in np.arange(1, 0, -0.01):
                         self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
