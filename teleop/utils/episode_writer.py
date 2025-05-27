@@ -59,15 +59,15 @@ class EpisodeWriter():
                 "audio": {"sample_rate": 16000, "channels": 1, "format":"PCM", "bits":16},    # PCM_S16
                 "joint_names":{
                     "left_arm":   ['kLeftShoulderPitch' ,'kLeftShoulderRoll', 'kLeftShoulderYaw', 'kLeftElbow', 'kLeftWristRoll', 'kLeftWristPitch', 'kLeftWristyaw'],
-                    "left_hand":  [],
+                    "left_ee":  [],
                     "right_arm":  [],
-                    "right_hand": [],
+                    "right_ee": [],
                     "body":       [],
                 },
 
                 "tactile_names": {
-                    "left_hand": [],
-                    "right_hand": [],
+                    "left_ee": [],
+                    "right_ee": [],
                 }, 
             }
     def text_desc(self):

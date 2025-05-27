@@ -206,24 +206,24 @@ if __name__ == '__main__':
                     # dex hand or gripper
                     if args.ee == "dex3" and args.xr_mode == 'hand':
                         with dual_hand_data_lock:
-                            left_hand_state = dual_hand_state_array[:7]
-                            right_hand_state = dual_hand_state_array[-7:]
+                            left_ee_state = dual_hand_state_array[:7]
+                            right_ee_state = dual_hand_state_array[-7:]
                             left_hand_action = dual_hand_action_array[:7]
                             right_hand_action = dual_hand_action_array[-7:]
                             current_body_state = []
                             current_body_action = []
                     elif args.ee == "gripper" and args.xr_mode == 'hand':
                         with dual_gripper_data_lock:
-                            left_hand_state = [dual_gripper_state_array[1]]
-                            right_hand_state = [dual_gripper_state_array[0]]
+                            left_ee_state = [dual_gripper_state_array[1]]
+                            right_ee_state = [dual_gripper_state_array[0]]
                             left_hand_action = [dual_gripper_action_array[1]]
                             right_hand_action = [dual_gripper_action_array[0]]
                             current_body_state = []
                             current_body_action = []
                     elif args.ee == "gripper" and args.xr_mode == 'controller':
                         with dual_gripper_data_lock:
-                            left_hand_state = [dual_gripper_state_array[1]]
-                            right_hand_state = [dual_gripper_state_array[0]]
+                            left_ee_state = [dual_gripper_state_array[1]]
+                            right_ee_state = [dual_gripper_state_array[0]]
                             left_hand_action = [dual_gripper_action_array[1]]
                             right_hand_action = [dual_gripper_action_array[0]]
                             current_body_state = arm_ctrl.get_current_motor_q().tolist()
@@ -232,15 +232,15 @@ if __name__ == '__main__':
                                                    -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
                     elif args.ee == "inspire1" and args.xr_mode == 'hand':
                         with dual_hand_data_lock:
-                            left_hand_state = dual_hand_state_array[:6]
-                            right_hand_state = dual_hand_state_array[-6:]
+                            left_ee_state = dual_hand_state_array[:6]
+                            right_ee_state = dual_hand_state_array[-6:]
                             left_hand_action = dual_hand_action_array[:6]
                             right_hand_action = dual_hand_action_array[-6:]
                             current_body_state = []
                             current_body_action = []
                     else:
-                        left_hand_state = []
-                        right_hand_state = []
+                        left_ee_state = []
+                        right_ee_state = []
                         left_hand_action = []
                         right_hand_action = []
                         current_body_state = []
@@ -280,13 +280,13 @@ if __name__ == '__main__':
                                 "qvel":   [],                          
                                 "torque": [],                         
                             },                        
-                            "left_hand": {                                                                    
-                                "qpos":   left_hand_state,           
+                            "left_ee": {                                                                    
+                                "qpos":   left_ee_state,           
                                 "qvel":   [],                           
                                 "torque": [],                          
                             }, 
-                            "right_hand": {                                                                    
-                                "qpos":   right_hand_state,       
+                            "right_ee": {                                                                    
+                                "qpos":   right_ee_state,       
                                 "qvel":   [],                           
                                 "torque": [],  
                             }, 
@@ -305,12 +305,12 @@ if __name__ == '__main__':
                                 "qvel":   [],       
                                 "torque": [],       
                             },                         
-                            "left_hand": {                                   
+                            "left_ee": {                                   
                                 "qpos":   left_hand_action,       
                                 "qvel":   [],       
                                 "torque": [],       
                             }, 
-                            "right_hand": {                                   
+                            "right_ee": {                                   
                                 "qpos":   right_hand_action,       
                                 "qvel":   [],       
                                 "torque": [], 

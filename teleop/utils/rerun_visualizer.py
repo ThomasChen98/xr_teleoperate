@@ -89,8 +89,8 @@ class RerunLogger:
         data_plot_paths = [
                            f"{self.prefix}left_arm", 
                            f"{self.prefix}right_arm", 
-                           f"{self.prefix}left_hand", 
-                           f"{self.prefix}right_hand"
+                           f"{self.prefix}left_ee", 
+                           f"{self.prefix}right_ee"
         ]
         for plot_path in data_plot_paths:
             view = rrb.TimeSeriesView(
