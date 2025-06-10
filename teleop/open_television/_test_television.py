@@ -75,11 +75,11 @@ def run_test_television():
             time.sleep(0.03)
     except KeyboardInterrupt:
         running = False
-        logger_mp.info("KeyboardInterrupt, exiting program...")
+        logger_mp.warning("KeyboardInterrupt, exiting program...")
     finally:
         image_shm.unlink()
         image_shm.close()
-        logger_mp.info("Finally, exiting program...")
+        logger_mp.warning("Finally, exiting program...")
         exit(0)
 
 if __name__ == '__main__':

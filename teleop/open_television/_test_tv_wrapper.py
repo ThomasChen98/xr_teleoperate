@@ -35,21 +35,24 @@ def run_test_tv_wrapper():
             teleData = tv_wrapper.get_motion_state_data()
 
             logger_mp.info("=== TeleData Snapshot ===")
-            logger_mp.info("[Head Rotation Matrix]:\n", teleData.head_rotation)
-            logger_mp.info("[Left EE Pose]:\n", teleData.left_arm_pose)
-            logger_mp.info("[Right EE Pose]:\n", teleData.right_arm_pose)
+            logger_mp.info(f"[Head Rotation Matrix]:\n{teleData.head_rotation}")
+            logger_mp.info(f"[Left EE Pose]:\n{teleData.left_arm_pose}")
+            logger_mp.info(f"[Right EE Pose]:\n{teleData.right_arm_pose}")
 
             if use_hand_track:
-                logger_mp.info("[Left Hand Position] shape {}:\n{}".format(teleData.left_hand_pos.shape, teleData.left_hand_pos))
-                logger_mp.info("[Right Hand Position] shape {}:\n{}".format(teleData.right_hand_pos.shape, teleData.right_hand_pos))
+                logger_mp.info(f"[Left Hand Position] shape {teleData.left_hand_pos.shape}:\n{teleData.left_hand_pos}")
+                logger_mp.info(f"[Right Hand Position] shape {teleData.right_hand_pos.shape}:\n{teleData.right_hand_pos}")
+                
                 if teleData.left_hand_rot is not None:
-                    logger_mp.info("[Left Hand Rotation] shape {}:\n{}".format(teleData.left_hand_rot.shape, teleData.left_hand_rot))
+                    logger_mp.info(f"[Left Hand Rotation] shape {teleData.left_hand_rot.shape}:\n{teleData.left_hand_rot}")
                 if teleData.right_hand_rot is not None:
-                    logger_mp.info("[Right Hand Rotation] shape {}:\n{}".format(teleData.right_hand_rot.shape, teleData.right_hand_rot))
+                    logger_mp.info(f"[Right Hand Rotation] shape {teleData.right_hand_rot.shape}:\n{teleData.right_hand_rot}")
+                
                 if teleData.left_pinch_value is not None:
-                    logger_mp.info("[Left Pinch Value]: {:.2f}".format(teleData.left_pinch_value))
+                    logger_mp.info(f"[Left Pinch Value]: {teleData.left_pinch_value:.2f}")
                 if teleData.right_pinch_value is not None:
-                    logger_mp.info("[Right Pinch Value]: {:.2f}".format(teleData.right_pinch_value))
+                    logger_mp.info(f"[Right Pinch Value]: {teleData.right_pinch_value:.2f}")
+                
                 if teleData.tele_state:
                     state = teleData.tele_state
                     logger_mp.info("[Hand State]:")
@@ -60,6 +63,7 @@ def run_test_tv_wrapper():
             else:
                 logger_mp.info(f"[Left Trigger Value]: {teleData.left_trigger_value:.2f}")
                 logger_mp.info(f"[Right Trigger Value]: {teleData.right_trigger_value:.2f}")
+                
                 if teleData.tele_state:
                     state = teleData.tele_state
                     logger_mp.info("[Controller State]:")
@@ -80,11 +84,11 @@ def run_test_tv_wrapper():
 
     except KeyboardInterrupt:
         running = False
-        logger_mp.info("KeyboardInterrupt, exiting program...")
+        logger_mp.warning("KeyboardInterrupt, exiting program...")
     finally:
         image_shm.unlink()
         image_shm.close()
-        logger_mp.info("Finally, exiting program...")
+        logger_mp.warning("Finally, exiting program...")
         exit(0)
 
 if __name__ == '__main__':
