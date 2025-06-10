@@ -5,6 +5,8 @@ import time
 import struct
 from collections import deque
 from multiprocessing import shared_memory
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 
 class ImageClient:
     def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None, 
@@ -85,10 +87,10 @@ class ImageClient:
         if frame_id != expected_frame_id:
             lost = frame_id - expected_frame_id
             if lost < 0:
-                print(f"[Image Client] Received out-of-order frame ID: {frame_id}")
+                logger_mp.info(f"[Image Client] Received out-of-order frame ID: {frame_id}")
             else:
                 self._lost_frames += lost
-                print(f"[Image Client] Detected lost frames: {lost}, Expected frame ID: {expected_frame_id}, Received frame ID: {frame_id}")
+                logger_mp.warning(f"[Image Client] Detected lost frames: {lost}, Expected frame ID: {expected_frame_id}, Received frame ID: {frame_id}")
         self._last_frame_id = frame_id
         self._total_frames = frame_id + 1
 
@@ -111,7 +113,7 @@ class ImageClient:
             # Calculate lost frame rate
             lost_frame_rate = (self._lost_frames / self._total_frames) * 100 if self._total_frames > 0 else 0
 
-            print(f"[Image Client] Real-time FPS: {real_time_fps:.2f}, Avg Latency: {avg_latency*1000:.2f} ms, Max Latency: {max_latency*1000:.2f} ms, \
+            logger_mp.info(f"[Image Client] Real-time FPS: {real_time_fps:.2f}, Avg Latency: {avg_latency*1000:.2f} ms, Max Latency: {max_latency*1000:.2f} ms, \
                   Min Latency: {min_latency*1000:.2f} ms, Jitter: {jitter*1000:.2f} ms, Lost Frame Rate: {lost_frame_rate:.2f}%")
     
     def _close(self):
@@ -119,7 +121,7 @@ class ImageClient:
         self._context.term()
         if self._image_show:
             cv2.destroyAllWindows()
-        print("Image client has been closed.")
+        logger_mp.info("Image client has been closed.")
 
     
     def receive_process(self):
@@ -129,7 +131,7 @@ class ImageClient:
         self._socket.connect(f"tcp://{self._server_address}:{self._port}")
         self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
 
-        print("\nImage client has started, waiting to receive data...")
+        logger_mp.info("\nImage client has started, waiting to receive data...")
         try:
             while self.running:
                 # Receive message
@@ -144,7 +146,7 @@ class ImageClient:
                         jpg_bytes = message[header_size:]
                         timestamp, frame_id = struct.unpack('dI', header)
                     except struct.error as e:
-                        print(f"[Image Client] Error unpacking header: {e}, discarding message.")
+                        logger_mp.warning(f"[Image Client] Error unpacking header: {e}, discarding message.")
                         continue
                 else:
                     # No header, entire message is image data
@@ -153,7 +155,7 @@ class ImageClient:
                 np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
                 current_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
                 if current_image is None:
-                    print("[Image Client] Failed to decode image.")
+                    logger_mp.warning("[Image Client] Failed to decode image.")
                     continue
 
                 if self.tv_enable_shm:
@@ -174,9 +176,9 @@ class ImageClient:
                     self._print_performance_metrics(receive_time)
 
         except KeyboardInterrupt:
-            print("Image client interrupted by user.")
+            logger_mp.info("Image client interrupted by user.")
         except Exception as e:
-            print(f"[Image Client] An error occurred while receiving data: {e}")
+            logger_mp.warning(f"[Image Client] An error occurred while receiving data: {e}")
         finally:
             self._close()
 

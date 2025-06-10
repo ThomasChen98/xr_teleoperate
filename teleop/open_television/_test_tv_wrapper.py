@@ -8,6 +8,9 @@ import numpy as np
 import time
 from multiprocessing import shared_memory
 from open_television import TeleVisionWrapper
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__, level=logging_mp.INFO)
+
 
 def run_test_tv_wrapper():
     image_shape = (480, 640 * 2, 3)
@@ -31,57 +34,57 @@ def run_test_tv_wrapper():
             start_time = time.time()
             teleData = tv_wrapper.get_motion_state_data()
 
-            print("=== TeleData Snapshot ===")
-            print("[Head Rotation Matrix]:\n", teleData.head_rotation)
-            print("[Left EE Pose]:\n", teleData.left_arm_pose)
-            print("[Right EE Pose]:\n", teleData.right_arm_pose)
+            logger_mp.info("=== TeleData Snapshot ===")
+            logger_mp.info("[Head Rotation Matrix]:\n", teleData.head_rotation)
+            logger_mp.info("[Left EE Pose]:\n", teleData.left_arm_pose)
+            logger_mp.info("[Right EE Pose]:\n", teleData.right_arm_pose)
 
             if use_hand_track:
-                print("[Left Hand Position] shape {}:\n{}".format(teleData.left_hand_pos.shape, teleData.left_hand_pos))
-                print("[Right Hand Position] shape {}:\n{}".format(teleData.right_hand_pos.shape, teleData.right_hand_pos))
+                logger_mp.info("[Left Hand Position] shape {}:\n{}".format(teleData.left_hand_pos.shape, teleData.left_hand_pos))
+                logger_mp.info("[Right Hand Position] shape {}:\n{}".format(teleData.right_hand_pos.shape, teleData.right_hand_pos))
                 if teleData.left_hand_rot is not None:
-                    print("[Left Hand Rotation] shape {}:\n{}".format(teleData.left_hand_rot.shape, teleData.left_hand_rot))
+                    logger_mp.info("[Left Hand Rotation] shape {}:\n{}".format(teleData.left_hand_rot.shape, teleData.left_hand_rot))
                 if teleData.right_hand_rot is not None:
-                    print("[Right Hand Rotation] shape {}:\n{}".format(teleData.right_hand_rot.shape, teleData.right_hand_rot))
+                    logger_mp.info("[Right Hand Rotation] shape {}:\n{}".format(teleData.right_hand_rot.shape, teleData.right_hand_rot))
                 if teleData.left_pinch_value is not None:
-                    print("[Left Pinch Value]: {:.2f}".format(teleData.left_pinch_value))
+                    logger_mp.info("[Left Pinch Value]: {:.2f}".format(teleData.left_pinch_value))
                 if teleData.right_pinch_value is not None:
-                    print("[Right Pinch Value]: {:.2f}".format(teleData.right_pinch_value))
+                    logger_mp.info("[Right Pinch Value]: {:.2f}".format(teleData.right_pinch_value))
                 if teleData.tele_state:
                     state = teleData.tele_state
-                    print("[Hand State]:")
-                    print(f"  Left Pinch state: {state.left_pinch_state}")
-                    print(f"  Left Squeeze: {state.left_squeeze_state} ({state.left_squeeze_value:.2f})")
-                    print(f"  Right Pinch state: {state.right_pinch_state}")
-                    print(f"  Right Squeeze: {state.right_squeeze_state} ({state.right_squeeze_value:.2f})")
+                    logger_mp.info("[Hand State]:")
+                    logger_mp.info(f"  Left Pinch state: {state.left_pinch_state}")
+                    logger_mp.info(f"  Left Squeeze: {state.left_squeeze_state} ({state.left_squeeze_value:.2f})")
+                    logger_mp.info(f"  Right Pinch state: {state.right_pinch_state}")
+                    logger_mp.info(f"  Right Squeeze: {state.right_squeeze_state} ({state.right_squeeze_value:.2f})")
             else:
-                print(f"[Left Trigger Value]: {teleData.left_trigger_value:.2f}")
-                print(f"[Right Trigger Value]: {teleData.right_trigger_value:.2f}")
+                logger_mp.info(f"[Left Trigger Value]: {teleData.left_trigger_value:.2f}")
+                logger_mp.info(f"[Right Trigger Value]: {teleData.right_trigger_value:.2f}")
                 if teleData.tele_state:
                     state = teleData.tele_state
-                    print("[Controller State]:")
-                    print(f"  Left Trigger: {state.left_trigger_state}")
-                    print(f"  Left Squeeze: {state.left_squeeze_ctrl_state} ({state.left_squeeze_ctrl_value:.2f})")
-                    print(f"  Left Thumbstick: {state.left_thumbstick_state} ({state.left_thumbstick_value})")
-                    print(f"  Left A/B Buttons: A={state.left_aButton}, B={state.left_bButton}")
-                    print(f"  Right Trigger: {state.right_trigger_state}")
-                    print(f"  Right Squeeze: {state.right_squeeze_ctrl_state} ({state.right_squeeze_ctrl_value:.2f})")
-                    print(f"  Right Thumbstick: {state.right_thumbstick_state} ({state.right_thumbstick_value})")
-                    print(f"  Right A/B Buttons: A={state.right_aButton}, B={state.right_bButton}")
+                    logger_mp.info("[Controller State]:")
+                    logger_mp.info(f"  Left Trigger: {state.left_trigger_state}")
+                    logger_mp.info(f"  Left Squeeze: {state.left_squeeze_ctrl_state} ({state.left_squeeze_ctrl_value:.2f})")
+                    logger_mp.info(f"  Left Thumbstick: {state.left_thumbstick_state} ({state.left_thumbstick_value})")
+                    logger_mp.info(f"  Left A/B Buttons: A={state.left_aButton}, B={state.left_bButton}")
+                    logger_mp.info(f"  Right Trigger: {state.right_trigger_state}")
+                    logger_mp.info(f"  Right Squeeze: {state.right_squeeze_ctrl_state} ({state.right_squeeze_ctrl_value:.2f})")
+                    logger_mp.info(f"  Right Thumbstick: {state.right_thumbstick_state} ({state.right_thumbstick_value})")
+                    logger_mp.info(f"  Right A/B Buttons: A={state.right_aButton}, B={state.right_bButton}")
 
             current_time = time.time()
             time_elapsed = current_time - start_time
             sleep_time = max(0, 0.033 - time_elapsed)
             time.sleep(sleep_time)
-            # print(f"main process sleep: {sleep_time}")
+            logger_mp.debug(f"main process sleep: {sleep_time}")
 
     except KeyboardInterrupt:
         running = False
-        print("KeyboardInterrupt, exiting program...")
+        logger_mp.info("KeyboardInterrupt, exiting program...")
     finally:
         image_shm.unlink()
         image_shm.close()
-        print("Finally, exiting program...")
+        logger_mp.info("Finally, exiting program...")
         exit(0)
 
 if __name__ == '__main__':

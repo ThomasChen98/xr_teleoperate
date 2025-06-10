@@ -8,7 +8,10 @@ import numpy as np
 from enum import IntEnum
 import threading
 import time
-from multiprocessing import Process, shared_memory, Array, Lock
+from multiprocessing import Process, Array
+
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 
 inspire_tip_indices = [4, 9, 14, 19, 24]
 Inspire_Num_Motors = 6
@@ -18,7 +21,7 @@ kTopicInspireState = "rt/inspire/state"
 class Inspire_Controller:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
                        dual_hand_action_array = None, fps = 100.0, Unit_Test = False):
-        print("Initialize Inspire_Controller...")
+        logger_mp.info("Initialize Inspire_Controller...")
         self.fps = fps
         self.Unit_Test = Unit_Test
         if not self.Unit_Test:
@@ -47,14 +50,14 @@ class Inspire_Controller:
             if any(self.right_hand_state_array): # any(self.left_hand_state_array) and 
                 break
             time.sleep(0.01)
-            print("[Inspire_Controller] Waiting to subscribe dds...")
+            logger_mp.warning("[Inspire_Controller] Waiting to subscribe dds...")
 
         hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
                                                                           dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))
         hand_control_process.daemon = True
         hand_control_process.start()
 
-        print("Initialize Inspire_Controller OK!\n")
+        logger_mp.info("Initialize Inspire_Controller OK!\n")
 
     def _subscribe_hand_state(self):
         while True:
@@ -76,7 +79,7 @@ class Inspire_Controller:
             self.hand_msg.cmds[id].q = right_q_target[idx] 
 
         self.HandCmb_publisher.Write(self.hand_msg)
-        # print("hand ctrl publish ok.")
+        # logger_mp.debug("hand ctrl publish ok.")
     
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
@@ -147,7 +150,7 @@ class Inspire_Controller:
                 sleep_time = max(0, (1 / self.fps) - time_elapsed)
                 time.sleep(sleep_time)
         finally:
-            print("Inspire_Controller has been closed.")
+            logger_mp.info("Inspire_Controller has been closed.")
 
 # Update hand state, according to the official documentation, https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand
 # the state sequence is as shown in the table below

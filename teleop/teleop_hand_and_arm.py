@@ -4,6 +4,9 @@ import argparse
 import cv2
 from multiprocessing import shared_memory, Value, Array, Lock
 import threading
+import logging_mp
+logging_mp.basic_config(level=logging_mp.INFO)
+logger_mp = logging_mp.get_logger(__name__)
 
 import os 
 import sys
@@ -38,7 +41,7 @@ if __name__ == '__main__':
     parser.set_defaults(debug = True)
 
     args = parser.parse_args()
-    print(f"args:{args}\n")
+    logger_mp.info(f"args: {args}")
 
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
     img_config = {
@@ -87,8 +90,9 @@ if __name__ == '__main__':
 
     # arm
     if args.arm == 'G1_29':
-        arm_ctrl = G1_29_ArmController(debug_mode=args.debug)
-        arm_ik = G1_29_ArmIK()
+        # arm_ctrl = G1_29_ArmController(debug_mode=args.debug)
+        # arm_ik = G1_29_ArmIK()
+        pass
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController()
         arm_ik = G1_23_ArmIK()
@@ -138,7 +142,7 @@ if __name__ == '__main__':
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
-            arm_ctrl.speed_gradual_max()
+            # arm_ctrl.speed_gradual_max()
             running = True
             while running:
                 start_time = time.time()
@@ -190,16 +194,16 @@ if __name__ == '__main__':
                                       -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
                                       -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
 
-                # get current robot state data.
-                current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
-                current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
+                # # get current robot state data.
+                # current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
+                # current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
-                # solve ik using motor data and wrist pose, then use ik results to control arms.
-                time_ik_start = time.time()
-                sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
-                time_ik_end = time.time()
-                # print(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
-                arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+                # # solve ik using motor data and wrist pose, then use ik results to control arms.
+                # time_ik_start = time.time()
+                # sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
+                # time_ik_end = time.time()
+                # logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
+                # arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
                 # record data
                 if args.record:
@@ -325,12 +329,12 @@ if __name__ == '__main__':
                 time_elapsed = current_time - start_time
                 sleep_time = max(0, (1 / args.frequency) - time_elapsed)
                 time.sleep(sleep_time)
-                # print(f"main process sleep: {sleep_time}")
+                logger_mp.debug(f"main process sleep: {sleep_time}")
 
     except KeyboardInterrupt:
-        print("KeyboardInterrupt, exiting program...")
+        logger_mp.info("KeyboardInterrupt, exiting program...")
     finally:
-        arm_ctrl.ctrl_dual_arm_go_home()
+        # arm_ctrl.ctrl_dual_arm_go_home()
         tv_img_shm.unlink()
         tv_img_shm.close()
         if WRIST:
@@ -338,5 +342,5 @@ if __name__ == '__main__':
             wrist_img_shm.close()
         if args.record:
             recorder.close()
-        print("Finally, exiting program...")
+        logger_mp.info("Finally, exiting program...")
         exit(0)

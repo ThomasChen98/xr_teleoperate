@@ -20,6 +20,9 @@ sys.path.append(parent2_dir)
 from teleop.robot_control.hand_retargeting import HandRetargeting, HandType
 from teleop.utils.weighted_moving_filter import WeightedMovingFilter
 
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
+
 
 unitree_tip_indices = [4, 9, 14] # [thumb, index, middle] in OpenXR
 Dex3_Num_Motors = 7
@@ -49,7 +52,7 @@ class Dex3_1_Controller:
 
         Unit_Test: Whether to enable unit testing
         """
-        print("Initialize Dex3_1_Controller...")
+        logger_mp.info("Initialize Dex3_1_Controller...")
 
         self.fps = fps
         self.Unit_Test = Unit_Test
@@ -83,14 +86,14 @@ class Dex3_1_Controller:
             if any(self.left_hand_state_array) and any(self.right_hand_state_array):
                 break
             time.sleep(0.01)
-            print("[Dex3_1_Controller] Waiting to subscribe dds...")
+            logger_mp.warning("[Dex3_1_Controller] Waiting to subscribe dds...")
 
         hand_control_process = Process(target=self.control_process, args=(left_hand_array_in, right_hand_array_in,  self.left_hand_state_array, self.right_hand_state_array,
                                                                           dual_hand_data_lock, dual_hand_state_array_out, dual_hand_action_array_out))
         hand_control_process.daemon = True
         hand_control_process.start()
 
-        print("Initialize Dex3_1_Controller OK!\n")
+        logger_mp.info("Initialize Dex3_1_Controller OK!\n")
 
     def _subscribe_hand_state(self):
         while True:
@@ -127,7 +130,7 @@ class Dex3_1_Controller:
 
         self.LeftHandCmb_publisher.Write(self.left_msg)
         self.RightHandCmb_publisher.Write(self.right_msg)
-        # print("hand ctrl publish ok.")
+        # logger_mp.debug("hand ctrl publish ok.")
     
     def control_process(self, left_hand_array_in, right_hand_array_in, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array_out = None, dual_hand_action_array_out = None):
@@ -204,7 +207,7 @@ class Dex3_1_Controller:
                 sleep_time = max(0, (1 / self.fps) - time_elapsed)
                 time.sleep(sleep_time)
         finally:
-            print("Dex3_1_Controller has been closed.")
+            logger_mp.info("Dex3_1_Controller has been closed.")
 
 class Dex3_1_Left_JointIndex(IntEnum):
     kLeftHandThumb0 = 0
@@ -251,7 +254,7 @@ class Gripper_Controller:
         Unit_Test: Whether to enable unit testing
         """
 
-        print("Initialize Gripper_Controller...")
+        logger_mp.info("Initialize Gripper_Controller...")
 
         self.fps = fps
         self.Unit_Test = Unit_Test
@@ -281,14 +284,14 @@ class Gripper_Controller:
             if any(state != 0.0 for state in self.dual_gripper_state):
                 break
             time.sleep(0.01)
-            print("[Gripper_Controller] Waiting to subscribe dds...")
+            logger_mp.warning("[Gripper_Controller] Waiting to subscribe dds...")
 
         self.gripper_control_thread = threading.Thread(target=self.control_thread, args=(left_gripper_value_in, right_gripper_value_in, self.dual_gripper_state,
                                                                                          dual_gripper_data_lock, dual_gripper_state_out, dual_gripper_action_out))
         self.gripper_control_thread.daemon = True
         self.gripper_control_thread.start()
 
-        print("Initialize Gripper_Controller OK!\n")
+        logger_mp.info("Initialize Gripper_Controller OK!\n")
 
     def _subscribe_gripper_state(self):
         while True:
@@ -304,7 +307,7 @@ class Gripper_Controller:
             self.gripper_msg.cmds[id].q = gripper_q_target[idx]
 
         self.GripperCmb_publisher.Write(self.gripper_msg)
-        # print("gripper ctrl publish ok.")
+        # logger_mp.debug("gripper ctrl publish ok.")
     
     def control_thread(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_state_in, dual_hand_data_lock = None, 
                              dual_gripper_state_out = None, dual_gripper_action_out = None):
@@ -374,9 +377,9 @@ class Gripper_Controller:
                         dual_gripper_state_out[:] = dual_gripper_state - np.array([RIGHT_MAPPED_MIN, LEFT_MAPPED_MIN])
                         dual_gripper_action_out[:] = dual_gripper_action - np.array([RIGHT_MAPPED_MIN, LEFT_MAPPED_MIN])
                 
-                # print(f"LEFT: euclidean:{left_euclidean_distance:.4f} \tstate:{dual_gripper_state_out[1]:.4f}\
+                # logger_mp.debug(f"LEFT: euclidean:{left_euclidean_distance:.4f} \tstate:{dual_gripper_state_out[1]:.4f}\
                 #       \ttarget_action:{right_target_action - RIGHT_MAPPED_MIN:.4f} \tactual_action:{dual_gripper_action_out[1]:.4f}")
-                # print(f"RIGHT:euclidean:{right_euclidean_distance:.4f} \tstate:{dual_gripper_state_out[0]:.4f}\
+                # logger_mp.debug(f"RIGHT:euclidean:{right_euclidean_distance:.4f} \tstate:{dual_gripper_state_out[0]:.4f}\
                 #       \ttarget_action:{left_target_action - LEFT_MAPPED_MIN:.4f} \tactual_action:{dual_gripper_action_out[0]:.4f}")
 
                 self.ctrl_dual_gripper(dual_gripper_action)
@@ -385,7 +388,7 @@ class Gripper_Controller:
                 sleep_time = max(0, (1 / self.fps) - time_elapsed)
                 time.sleep(sleep_time)
         finally:
-            print("Gripper_Controller has been closed.")
+            logger_mp.info("Gripper_Controller has been closed.")
 
 class Gripper_JointIndex(IntEnum):
     kLeftGripper = 0
@@ -402,7 +405,7 @@ if __name__ == "__main__":
     parser.add_argument('--gripper', dest='dex', action='store_false', help='Use gripper')
     parser.set_defaults(dex=True)
     args = parser.parse_args()
-    print(f"args:{args}\n")
+    logger_mp.info(f"args:{args}\n")
 
     # image
     img_config = {
@@ -457,5 +460,5 @@ if __name__ == "__main__":
             right_hand_array[:] = right_hand.flatten()
 
             # with dual_hand_data_lock:
-            #     print(f"state : {list(dual_hand_state_array)} \naction: {list(dual_hand_action_array)} \n")
+            #     logger_mp.info(f"state : {list(dual_hand_state_array)} \naction: {list(dual_hand_action_array)} \n")
             time.sleep(0.01)

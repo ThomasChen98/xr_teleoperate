@@ -7,7 +7,8 @@ from pinocchio import casadi as cpin
 from pinocchio.visualize import MeshcatVisualizer   
 import os
 import sys
-
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 parent2_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(parent2_dir)
 
@@ -83,9 +84,9 @@ class G1_29_ArmIK:
         # for i in range(self.reduced_robot.model.nframes):
         #     frame = self.reduced_robot.model.frames[i]
         #     frame_id = self.reduced_robot.model.getFrameId(frame.name)
-        #     print(f"Frame ID: {frame_id}, Name: {frame.name}")
+        #     logger_mp.debug(f"Frame ID: {frame_id}, Name: {frame.name}")
         # for idx, name in enumerate(self.reduced_robot.model.names):
-        #     print(f"{idx}: {name}")
+        #     logger_mp.debug(f"{idx}: {name}")
 
         # Creating Casadi models and data for symbolic computing
         self.cmodel = cpin.Model(self.reduced_robot.model)
@@ -237,7 +238,7 @@ class G1_29_ArmIK:
             return sol_q, sol_tauff
         
         except Exception as e:
-            print(f"ERROR in convergence, plotting debug info.{e}")
+            logger_mp.error(f"ERROR in convergence, plotting debug info.{e}")
 
             sol_q = self.opti.debug.value(self.var_q)
             self.smooth_filter.add_data(sol_q)
@@ -252,7 +253,7 @@ class G1_29_ArmIK:
 
             sol_tauff = pin.rnea(self.reduced_robot.model, self.reduced_robot.data, sol_q, v, np.zeros(self.reduced_robot.model.nv))
 
-            print(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
+            logger_mp.error(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
             if self.Visualization:
                 self.vis.display(sol_q)  # for visualization
 
@@ -311,7 +312,7 @@ class G1_23_ArmIK:
         # for i in range(self.reduced_robot.model.nframes):
         #     frame = self.reduced_robot.model.frames[i]
         #     frame_id = self.reduced_robot.model.getFrameId(frame.name)
-        #     print(f"Frame ID: {frame_id}, Name: {frame.name}")
+        #     logger_mp.debug(f"Frame ID: {frame_id}, Name: {frame.name}")
         
         # Creating Casadi models and data for symbolic computing
         self.cmodel = cpin.Model(self.reduced_robot.model)
@@ -463,7 +464,7 @@ class G1_23_ArmIK:
             return sol_q, sol_tauff
         
         except Exception as e:
-            print(f"ERROR in convergence, plotting debug info.{e}")
+            logger_mp.error(f"ERROR in convergence, plotting debug info.{e}")
 
             sol_q = self.opti.debug.value(self.var_q)
             self.smooth_filter.add_data(sol_q)
@@ -478,7 +479,7 @@ class G1_23_ArmIK:
 
             sol_tauff = pin.rnea(self.reduced_robot.model, self.reduced_robot.data, sol_q, v, np.zeros(self.reduced_robot.model.nv))
 
-            print(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
+            logger_mp.error(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
             if self.Visualization:
                 self.vis.display(sol_q)  # for visualization
 
@@ -562,7 +563,7 @@ class H1_2_ArmIK:
         # for i in range(self.reduced_robot.model.nframes):
         #     frame = self.reduced_robot.model.frames[i]
         #     frame_id = self.reduced_robot.model.getFrameId(frame.name)
-        #     print(f"Frame ID: {frame_id}, Name: {frame.name}")
+        #     logger_mp.debug(f"Frame ID: {frame_id}, Name: {frame.name}")
         
         # Creating Casadi models and data for symbolic computing
         self.cmodel = cpin.Model(self.reduced_robot.model)
@@ -714,7 +715,7 @@ class H1_2_ArmIK:
             return sol_q, sol_tauff
         
         except Exception as e:
-            print(f"ERROR in convergence, plotting debug info.{e}")
+            logger_mp.error(f"ERROR in convergence, plotting debug info.{e}")
 
             sol_q = self.opti.debug.value(self.var_q)
             self.smooth_filter.add_data(sol_q)
@@ -729,7 +730,7 @@ class H1_2_ArmIK:
 
             sol_tauff = pin.rnea(self.reduced_robot.model, self.reduced_robot.data, sol_q, v, np.zeros(self.reduced_robot.model.nv))
 
-            print(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
+            logger_mp.error(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
             if self.Visualization:
                 self.vis.display(sol_q)  # for visualization
 
@@ -816,7 +817,7 @@ class H1_ArmIK:
         # for i in range(self.reduced_robot.model.nframes):
         #     frame = self.reduced_robot.model.frames[i]
         #     frame_id = self.reduced_robot.model.getFrameId(frame.name)
-        #     print(f"Frame ID: {frame_id}, Name: {frame.name}")
+        #     logger_mp.debug(f"Frame ID: {frame_id}, Name: {frame.name}")
         
         # Creating Casadi models and data for symbolic computing
         self.cmodel = cpin.Model(self.reduced_robot.model)
@@ -968,7 +969,7 @@ class H1_ArmIK:
             return sol_q, sol_tauff
         
         except Exception as e:
-            print(f"ERROR in convergence, plotting debug info.{e}")
+            logger_mp.error(f"ERROR in convergence, plotting debug info.{e}")
 
             sol_q = self.opti.debug.value(self.var_q)
             self.smooth_filter.add_data(sol_q)
@@ -983,7 +984,7 @@ class H1_ArmIK:
 
             sol_tauff = pin.rnea(self.reduced_robot.model, self.reduced_robot.data, sol_q, v, np.zeros(self.reduced_robot.model.nv))
 
-            print(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
+            logger_mp.error(f"sol_q:{sol_q} \nmotorstate: \n{current_lr_arm_motor_q} \nleft_pose: \n{left_wrist} \nright_pose: \n{right_wrist}")
             if self.Visualization:
                 self.vis.display(sol_q)  # for visualization
 
