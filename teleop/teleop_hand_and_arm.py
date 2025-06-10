@@ -90,8 +90,8 @@ if __name__ == '__main__':
 
     # arm
     if args.arm == 'G1_29':
-        # arm_ctrl = G1_29_ArmController(debug_mode=args.debug)
-        # arm_ik = G1_29_ArmIK()
+        arm_ctrl = G1_29_ArmController(debug_mode=args.debug)
+        arm_ik = G1_29_ArmIK()
         pass
     elif args.arm == 'G1_23':
         arm_ctrl = G1_23_ArmController()
@@ -142,7 +142,7 @@ if __name__ == '__main__':
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
-            # arm_ctrl.speed_gradual_max()
+            arm_ctrl.speed_gradual_max()
             running = True
             while running:
                 start_time = time.time()
@@ -194,16 +194,16 @@ if __name__ == '__main__':
                                       -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
                                       -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
 
-                # # get current robot state data.
-                # current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
-                # current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
+                # get current robot state data.
+                current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
+                current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
-                # # solve ik using motor data and wrist pose, then use ik results to control arms.
-                # time_ik_start = time.time()
-                # sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
-                # time_ik_end = time.time()
-                # logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
-                # arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+                # solve ik using motor data and wrist pose, then use ik results to control arms.
+                time_ik_start = time.time()
+                sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
+                time_ik_end = time.time()
+                logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
+                arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
                 # record data
                 if args.record:
@@ -334,7 +334,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         logger_mp.info("KeyboardInterrupt, exiting program...")
     finally:
-        # arm_ctrl.ctrl_dual_arm_go_home()
+        arm_ctrl.ctrl_dual_arm_go_home()
         tv_img_shm.unlink()
         tv_img_shm.close()
         if WRIST:
