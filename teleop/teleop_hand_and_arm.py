@@ -21,24 +21,32 @@ from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_C
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
+from sshkeyboard import listen_keyboard
 
+
+running = True
+recording = False
+def on_press(key):
+    global running, recording
+    if key == 'q':
+        running = False
+    elif key == 's':
+        recording = not recording
+        logger_mp.info(f"recording : {recording}")
+threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press}, daemon=True).start()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data', help = 'path to save data')
     parser.add_argument('--frequency', type = float, default = 90.0, help = 'save data\'s frequency')
 
-    parser.add_argument('--record', action = 'store_true', help = 'Save data or not')
-    parser.add_argument('--no-record', dest = 'record', action = 'store_false', help = 'Do not save data')
-    parser.set_defaults(record = False)
-
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
 
-    parser.add_argument('--debug', action = 'store_true', help = 'debug mode')
-    parser.add_argument('--no-debug', dest = 'debug', action = 'store_false', help = 'motion mode')
-    parser.set_defaults(debug = True)
+    parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
+    parser.add_argument('--debug', action = 'store_true', help = 'Enable debug mode')
+    parser.add_argument('--headless', action='store_true', help='Run in headless mode (no display)')
 
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
@@ -135,26 +143,29 @@ if __name__ == '__main__':
         sport_client.SetTimeout(0.0001)
         sport_client.Init()
     
-    if args.record:
+    if args.record and args.headless:
+        recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = False)
+    elif args.record and not args.headless:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = True)
-        recording = False
         
     try:
         user_input = input("Please enter the start signal (enter 'r' to start the subsequent program):\n")
         if user_input.lower() == 'r':
             arm_ctrl.speed_gradual_max()
-            running = True
             while running:
                 start_time = time.time()
 
-                # opencv image
-                tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
-                cv2.imshow("record image", tv_resized_image)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    running = False
-                elif key == ord('s') and args.record:
-                    recording = not recording # state flipping
+                if not args.headless:
+                    tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
+                    cv2.imshow("record image", tv_resized_image)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        running = False
+                    elif key == ord('s'):
+                        recording = not recording # state flipping
+                        logger_mp.info(f"recording : {recording}")
+
+                if args.record:
                     if recording:
                         if not recorder.create_episode():
                             recording = False
