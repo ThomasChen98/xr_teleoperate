@@ -99,6 +99,7 @@ class G1_29_ArmController:
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
             logger_mp.warning("[G1_29_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[G1_29_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
         self.crc = CRC()
@@ -370,6 +371,7 @@ class G1_23_ArmController:
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
             logger_mp.warning("[G1_23_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[G1_23_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
         self.crc = CRC()
@@ -626,6 +628,7 @@ class H1_2_ArmController:
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
             logger_mp.warning("[H1_2_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[H1_2_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
         self.crc = CRC()
@@ -887,6 +890,7 @@ class H1_ArmController:
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
             logger_mp.warning("[H1_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[H1_ArmController] Subscribe dds ok.")
 
         # initialize h1's lowcmd msg
         self.crc = CRC()

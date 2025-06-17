@@ -87,6 +87,7 @@ class Dex3_1_Controller:
                 break
             time.sleep(0.01)
             logger_mp.warning("[Dex3_1_Controller] Waiting to subscribe dds...")
+        logger_mp.info("[Dex3_1_Controller] Subscribe dds ok.")
 
         hand_control_process = Process(target=self.control_process, args=(left_hand_array_in, right_hand_array_in,  self.left_hand_state_array, self.right_hand_state_array,
                                                                           dual_hand_data_lock, dual_hand_state_array_out, dual_hand_action_array_out))
@@ -285,6 +286,7 @@ class Gripper_Controller:
                 break
             time.sleep(0.01)
             logger_mp.warning("[Gripper_Controller] Waiting to subscribe dds...")
+        logger_mp.info("[Gripper_Controller] Subscribe dds ok.")
 
         self.gripper_control_thread = threading.Thread(target=self.control_thread, args=(left_gripper_value_in, right_gripper_value_in, self.dual_gripper_state,
                                                                                          dual_gripper_data_lock, dual_gripper_state_out, dual_gripper_action_out))

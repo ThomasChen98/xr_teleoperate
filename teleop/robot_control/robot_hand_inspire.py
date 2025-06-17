@@ -51,6 +51,7 @@ class Inspire_Controller:
                 break
             time.sleep(0.01)
             logger_mp.warning("[Inspire_Controller] Waiting to subscribe dds...")
+        logger_mp.info("[Inspire_Controller] Subscribe dds ok.")
 
         hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
                                                                           dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))

@@ -131,7 +131,7 @@ class ImageClient:
         self._socket.connect(f"tcp://{self._server_address}:{self._port}")
         self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
 
-        logger_mp.info("\nImage client has started, waiting to receive data...")
+        logger_mp.info("Image client has started, waiting to receive data...")
         try:
             while self.running:
                 # Receive message
