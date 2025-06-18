@@ -21,22 +21,23 @@ from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_C
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
-from sshkeyboard import listen_keyboard
+from sshkeyboard import listen_keyboard, stop_listening
 
 
 start_signal = False
 running = True
-recording = False
+should_toggle_recording = False
+is_recording = False
 def on_press(key):
-    global running, recording, start_signal
+    global running, start_signal, should_toggle_recording
     if key == 'r':
         start_signal = True
-        logger_mp.info("[Key] start signal received.")
+        logger_mp.info("Program start signal received.")
     elif key == 'q':
+        stop_listening()
         running = False
     elif key == 's':
-        recording = not recording
-        logger_mp.info(f"recording : {recording}")
+        should_toggle_recording = True
 threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press}, daemon=True).start()
 
 if __name__ == '__main__':
@@ -49,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
 
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
-    parser.add_argument('--debug', action = 'store_true', help = 'Enable debug mode')
+    parser.add_argument('--debug', action = 'store_false', help = 'Enable debug mode')
     parser.add_argument('--headless', action='store_true', help='Run in headless mode (no display)')
 
     args = parser.parse_args()
@@ -155,7 +156,6 @@ if __name__ == '__main__':
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
         while not start_signal:
             time.sleep(0.01)
-        logger_mp.info("Program start.")
         arm_ctrl.speed_gradual_max()
         while running:
             start_time = time.time()
@@ -165,16 +165,20 @@ if __name__ == '__main__':
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
+                    stop_listening()
                     running = False
                 elif key == ord('s'):
-                    recording = not recording # state flipping
-                    logger_mp.info(f"recording : {recording}")
+                    should_toggle_recording = True
 
-            if args.record:
-                if recording:
-                    if not recorder.create_episode():
-                        recording = False
+            if args.record and should_toggle_recording:
+                should_toggle_recording = False
+                if not is_recording:
+                    if recorder.create_episode():
+                        is_recording = True
+                    else:
+                        logger_mp.error("Failed to create episode. Recording not started.")
                 else:
+                    is_recording = False
                     recorder.save_episode()
 
             # get input data
@@ -275,7 +279,7 @@ if __name__ == '__main__':
                 right_arm_state = current_lr_arm_q[-7:]
                 left_arm_action = sol_q[:7]
                 right_arm_action = sol_q[-7:]
-                if recording:
+                if is_recording:
                     colors = {}
                     depths = {}
                     if BINOCULAR:
