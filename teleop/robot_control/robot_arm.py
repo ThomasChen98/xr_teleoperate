@@ -59,12 +59,12 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self, debug_mode = True):
+    def __init__(self, debug_mode = True, is_use_sim = False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
         self.debug_mode = debug_mode
-
+        self.is_use_sim = is_use_sim
         self.kp_high = 300.0
         self.kd_high = 3.0
         self.kp_low = 80.0
@@ -169,7 +169,10 @@ class G1_29_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.is_use_sim:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(G1_29_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
@@ -335,7 +338,9 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self):
+    def __init__(self, is_use_sim = False):
+        self.is_use_sim = is_use_sim
+        
         logger_mp.info("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
         self.tauff_target = np.zeros(10)
@@ -438,7 +443,10 @@ class G1_23_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.is_use_sim:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(G1_23_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
@@ -592,7 +600,9 @@ class G1_23_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class H1_2_ArmController:
-    def __init__(self):
+    def __init__(self, is_use_sim = False):
+        self.is_use_sim = is_use_sim
+        
         logger_mp.info("Initialize H1_2_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
@@ -695,7 +705,10 @@ class H1_2_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.is_use_sim:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(H1_2_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
@@ -856,7 +869,9 @@ class H1_2_JointIndex(IntEnum):
     kNotUsedJoint7 = 34
 
 class H1_ArmController:
-    def __init__(self):
+    def __init__(self, is_use_sim = False):
+        self.is_use_sim = is_use_sim
+        
         logger_mp.info("Initialize H1_ArmController...")
         self.q_target = np.zeros(8)
         self.tauff_target = np.zeros(8)
@@ -951,7 +966,10 @@ class H1_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.is_use_sim:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(H1_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]

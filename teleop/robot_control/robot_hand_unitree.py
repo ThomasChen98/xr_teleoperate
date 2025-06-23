@@ -236,7 +236,7 @@ kTopicGripperState = "rt/unitree_actuator/state"
 
 class Gripper_Controller:
     def __init__(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_data_lock = None, dual_gripper_state_out = None, dual_gripper_action_out = None, 
-                       filter = True, fps = 200.0, Unit_Test = False):
+                       filter = True, fps = 200.0, Unit_Test = False, is_use_sim = False):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
@@ -259,6 +259,8 @@ class Gripper_Controller:
 
         self.fps = fps
         self.Unit_Test = Unit_Test
+        self.is_use_sim = is_use_sim
+        
         if filter:
             self.smooth_filter = WeightedMovingFilter(np.array([0.5, 0.3, 0.2]), Gripper_Num_Motors)
         else:
@@ -314,8 +316,10 @@ class Gripper_Controller:
     def control_thread(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_state_in, dual_hand_data_lock = None, 
                              dual_gripper_state_out = None, dual_gripper_action_out = None):
         self.running = True
-
-        DELTA_GRIPPER_CMD = 0.18         # The motor rotates 5.4 radians, the clamping jaw slide open 9 cm, so 0.6 rad <==> 1 cm, 0.18 rad <==> 3 mm
+        if self.is_use_sim:
+            DELTA_GRIPPER_CMD = 1.0
+        else:   
+            DELTA_GRIPPER_CMD = 0.18         # The motor rotates 5.4 radians, the clamping jaw slide open 9 cm, so 0.6 rad <==> 1 cm, 0.18 rad <==> 3 mm
         THUMB_INDEX_DISTANCE_MIN = 5.0
         THUMB_INDEX_DISTANCE_MAX = 7.0
         LEFT_MAPPED_MIN  = 0.0           # The minimum initial motor position when the gripper closes at startup.

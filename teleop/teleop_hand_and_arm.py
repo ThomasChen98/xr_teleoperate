@@ -53,19 +53,35 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action = 'store_false', help = 'Enable debug mode')
     parser.add_argument('--headless', action='store_true', help='Run in headless mode (no display)')
 
+    parser.add_argument('--is_use_sim', action = 'store_true', help = 'Use simulation or not')
+    parser.set_defaults(is_use_sim = False)
+
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
 
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
-    img_config = {
-        'fps': 30,
-        'head_camera_type': 'opencv',
-        'head_camera_image_shape': [480, 1280],  # Head camera resolution
-        'head_camera_id_numbers': [0],
-        'wrist_camera_type': 'opencv',
-        'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-        'wrist_camera_id_numbers': [2, 4],
-    }
+    if args.is_use_sim:
+        img_config = {
+            'fps': 30,
+            'head_camera_type': 'opencv',
+            'head_camera_image_shape': [480, 640],  # Head camera resolution
+            'head_camera_id_numbers': [0],
+            'wrist_camera_type': 'opencv',
+            'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
+            'wrist_camera_id_numbers': [2, 4],
+        }
+    else:
+        img_config = {
+            'fps': 30,
+            'head_camera_type': 'opencv',
+            'head_camera_image_shape': [480, 1280],  # Head camera resolution
+            'head_camera_id_numbers': [0],
+            'wrist_camera_type': 'opencv',
+            'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
+            'wrist_camera_id_numbers': [2, 4],
+        }
+
+
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
     if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
         BINOCULAR = True
@@ -89,9 +105,9 @@ if __name__ == '__main__':
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
         wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
         img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                 wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name)
+                                 wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name,server_address="127.0.0.1")
     else:
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
+        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, server_address="127.0.0.1")
 
     image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
     image_receive_thread.daemon = True
@@ -103,16 +119,16 @@ if __name__ == '__main__':
 
     # arm
     if args.arm == 'G1_29':
-        arm_ctrl = G1_29_ArmController(debug_mode=args.debug)
+        arm_ctrl = G1_29_ArmController(debug_mode=args.debug, is_use_sim=args.is_use_sim)
         arm_ik = G1_29_ArmIK()
     elif args.arm == 'G1_23':
-        arm_ctrl = G1_23_ArmController()
+        arm_ctrl = G1_23_ArmController(is_use_sim=args.is_use_sim)
         arm_ik = G1_23_ArmIK()
     elif args.arm == 'H1_2':
-        arm_ctrl = H1_2_ArmController()
+        arm_ctrl = H1_2_ArmController(is_use_sim=args.is_use_sim)
         arm_ik = H1_2_ArmIK()
     elif args.arm == 'H1':
-        arm_ctrl = H1_ArmController()
+        arm_ctrl = H1_ArmController(is_use_sim=args.is_use_sim)
         arm_ik = H1_ArmIK()
 
     # end-effector
@@ -129,7 +145,7 @@ if __name__ == '__main__':
         dual_gripper_data_lock = Lock()
         dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
         dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
-        gripper_ctrl = Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array)
+        gripper_ctrl = Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, is_use_sim=args.is_use_sim)
     elif args.ee == "inspire1":
         left_hand_pos_array = Array('d', 75, lock = True)      # [input]
         right_hand_pos_array = Array('d', 75, lock = True)     # [input]
