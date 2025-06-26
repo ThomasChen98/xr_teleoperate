@@ -206,8 +206,8 @@ class TeleVision:
                 MotionControllers(
                     stream=True,
                     key="motionControllers",
-                    showLeft=False,
-                    showRight=False,
+                    left=True,
+                    right=True,
                 ),
                 to="bgChildren",
             )

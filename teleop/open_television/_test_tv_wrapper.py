@@ -35,7 +35,7 @@ def run_test_tv_wrapper():
             teleData = tv_wrapper.get_motion_state_data()
 
             logger_mp.info("=== TeleData Snapshot ===")
-            logger_mp.info(f"[Head Rotation Matrix]:\n{teleData.head_rotation}")
+            logger_mp.info(f"[Head Rotation Matrix]:\n{teleData.head_pose}")
             logger_mp.info(f"[Left EE Pose]:\n{teleData.left_arm_pose}")
             logger_mp.info(f"[Right EE Pose]:\n{teleData.right_arm_pose}")
 

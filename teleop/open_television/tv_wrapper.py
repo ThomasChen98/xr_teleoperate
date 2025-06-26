@@ -166,7 +166,7 @@ class TeleStateData:
 
 @dataclass
 class TeleData:
-    head_rotation: np.ndarray   # (3,3) Head orientation matrix
+    head_pose: np.ndarray       # (4,4) SE(3) pose of head matrix
     left_arm_pose: np.ndarray   # (4,4) SE(3) pose of left arm
     right_arm_pose: np.ndarray  # (4,4) SE(3) pose of right arm
     left_hand_pos: np.ndarray = None  # (25,3) 3D positions of left hand joints
@@ -259,7 +259,6 @@ class TeleVisionWrapper:
             right_IPunitree_Brobot_head_arm[0:3, 3] = right_IPunitree_Brobot_world_arm[0:3, 3] - Brobot_world_head[0:3, 3]
 
             # =====coordinate origin offset=====
-            Brobot_world_head_rot = Brobot_world_head[:3, :3]
             # The origin of the coordinate for IK Solve is near the WAIST joint motor. You can use teleop/robot_control/robot_arm_ik.py Unit_Test to visualize it.
             # The origin of the coordinate of IPunitree_Brobot_head_arm is HEAD. 
             # So it is necessary to translate the origin of IPunitree_Brobot_head_arm from HEAD to WAIST.
@@ -340,7 +339,7 @@ class TeleVisionWrapper:
                 hand_state = None
 
             return TeleData(
-                head_rotation=Brobot_world_head_rot,
+                head_pose=Brobot_world_head,
                 left_arm_pose=left_IPunitree_Brobot_waist_arm,
                 right_arm_pose=right_IPunitree_Brobot_waist_arm,
                 left_hand_pos=left_IPunitree_Brobot_arm_hand_pos,
@@ -368,7 +367,6 @@ class TeleVisionWrapper:
             right_IPunitree_Brobot_head_arm[0:3, 3] = right_IPunitree_Brobot_head_arm[0:3, 3] - Brobot_world_head[0:3, 3]
 
             # =====coordinate origin offset=====
-            Brobot_world_head_rot = Brobot_world_head[:3, :3]
             # The origin of the coordinate for IK Solve is near the WAIST joint motor. You can use teleop/robot_control/robot_arm_ik.py Unit_Test to check it.
             # The origin of the coordinate of IPunitree_Brobot_head_arm is HEAD. 
             # So it is necessary to translate the origin of IPunitree_Brobot_head_arm from HEAD to WAIST.
@@ -403,7 +401,7 @@ class TeleVisionWrapper:
                 controller_state = None
 
             return TeleData(
-                head_rotation=Brobot_world_head_rot,
+                head_pose=Brobot_world_head,
                 left_arm_pose=left_IPunitree_Brobot_waist_arm,
                 right_arm_pose=right_IPunitree_Brobot_waist_arm,
                 left_trigger_value=10.0 - self.tvuer.left_controller_trigger_value * 10,
