@@ -24,7 +24,6 @@ import logging_mp
 logger_mp = logging_mp.get_logger(__name__)
 
 
-unitree_tip_indices = [4, 9, 14] # [thumb, index, middle] in OpenXR
 Dex3_Num_Motors = 7
 kTopicDex3LeftCommand = "rt/dex3/left/cmd"
 kTopicDex3RightCommand = "rt/dex3/right/cmd"
@@ -183,14 +182,8 @@ class Dex3_1_Controller:
                 state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
 
                 if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    ref_left_value = left_hand_data[unitree_tip_indices]
-                    ref_right_value = right_hand_data[unitree_tip_indices]
-                    ref_left_value[0] = ref_left_value[0] * 1.15
-                    ref_left_value[1] = ref_left_value[1] * 1.05
-                    ref_left_value[2] = ref_left_value[2] * 0.95
-                    ref_right_value[0] = ref_right_value[0] * 1.15
-                    ref_right_value[1] = ref_right_value[1] * 1.05
-                    ref_right_value[2] = ref_right_value[2] * 0.95
+                    ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
+                    ref_right_value = right_hand_data[self.hand_retargeting.right_indices[1,:]] - right_hand_data[self.hand_retargeting.right_indices[0,:]]
 
                     left_q_target  = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
                     right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
