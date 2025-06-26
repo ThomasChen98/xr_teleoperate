@@ -59,12 +59,12 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self, debug_mode = True, is_use_sim = False):
+    def __init__(self, motion_mode = False, simulation_mode = False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
-        self.debug_mode = debug_mode
-        self.is_use_sim = is_use_sim
+        self.motion_mode = motion_mode
+        self.simulation_mode = simulation_mode
         self.kp_high = 300.0
         self.kd_high = 3.0
         self.kp_low = 80.0
@@ -82,10 +82,10 @@ class G1_29_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        if self.debug_mode:
-            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
-        else:
+        if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
+        else:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -159,7 +159,7 @@ class G1_29_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
-        if not self.debug_mode:
+        if self.motion_mode:
             self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
 
         while True:
@@ -169,7 +169,7 @@ class G1_29_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -225,7 +225,7 @@ class G1_29_ArmController:
         while True:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                if not self.debug_mode:
+                if self.motion_mode:
                     for weight in np.arange(1, 0, -0.01):
                         self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
@@ -338,8 +338,8 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self, is_use_sim = False):
-        self.is_use_sim = is_use_sim
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
@@ -443,7 +443,7 @@ class G1_23_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -600,8 +600,8 @@ class G1_23_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class H1_2_ArmController:
-    def __init__(self, is_use_sim = False):
-        self.is_use_sim = is_use_sim
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize H1_2_ArmController...")
         self.q_target = np.zeros(14)
@@ -705,7 +705,7 @@ class H1_2_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -869,8 +869,8 @@ class H1_2_JointIndex(IntEnum):
     kNotUsedJoint7 = 34
 
 class H1_ArmController:
-    def __init__(self, is_use_sim = False):
-        self.is_use_sim = is_use_sim
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize H1_ArmController...")
         self.q_target = np.zeros(8)
@@ -966,7 +966,7 @@ class H1_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
