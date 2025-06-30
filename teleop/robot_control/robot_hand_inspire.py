@@ -13,7 +13,6 @@ from multiprocessing import Process, Array
 import logging_mp
 logger_mp = logging_mp.get_logger(__name__)
 
-inspire_tip_indices = [4, 9, 14, 19, 24]
 Inspire_Num_Motors = 6
 kTopicInspireCommand = "rt/inspire/cmd"
 kTopicInspireState = "rt/inspire/state"
@@ -103,16 +102,16 @@ class Inspire_Controller:
                 start_time = time.time()
                 # get dual hand state
                 with left_hand_array.get_lock():
-                    left_hand_mat  = np.array(left_hand_array[:]).reshape(25, 3).copy()
+                    left_hand_data  = np.array(left_hand_array[:]).reshape(25, 3).copy()
                 with right_hand_array.get_lock():
-                    right_hand_mat = np.array(right_hand_array[:]).reshape(25, 3).copy()
+                    right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
 
                 # Read left and right q_state from shared arrays
                 state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
 
-                if not np.all(right_hand_mat == 0.0) and not np.all(left_hand_mat[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    ref_left_value = left_hand_mat[inspire_tip_indices]
-                    ref_right_value = right_hand_mat[inspire_tip_indices]
+                if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
+                    ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
+                    ref_right_value = right_hand_data[self.hand_retargeting.right_indices[1,:]] - right_hand_data[self.hand_retargeting.right_indices[0,:]]
 
                     left_q_target  = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
                     right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
