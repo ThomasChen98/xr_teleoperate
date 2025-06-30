@@ -218,11 +218,13 @@ class G1_29_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(14)
             # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 if self.motion_mode:
@@ -231,6 +233,7 @@ class G1_29_ArmController:
                         time.sleep(0.02)
                 logger_mp.info("[G1_29_ArmController] both arms have reached the home position.")
                 break
+            attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -492,15 +495,18 @@ class G1_23_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[G1_23_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(10)
             # self.tauff_target = np.zeros(10)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 logger_mp.info("[G1_23_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -754,15 +760,18 @@ class H1_2_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[H1_2_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(14)
             # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 logger_mp.info("[H1_2_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -1011,15 +1020,18 @@ class H1_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[H1_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(8)
             # self.tauff_target = np.zeros(8)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 logger_mp.info("[H1_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
