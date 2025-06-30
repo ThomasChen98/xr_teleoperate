@@ -24,7 +24,7 @@ from teleop.utils.episode_writer import EpisodeWriter
 from sshkeyboard import listen_keyboard, stop_listening
 
 # for simulation
-from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactoryInitialize
+from unitree_sdk2py.core.channel import ChannelPublisher
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 def publish_reset_category(category: int,publisher): # Scene Reset signal
     msg = String_(data=str(category))
@@ -41,12 +41,15 @@ def on_press(key):
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
-    elif key == 'q':
+    elif start_signal == True and key == 'q':
         stop_listening()
         running = False
-    elif key == 's':
+    elif start_signal == True and key == 's':
         should_toggle_recording = True
-threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press}, daemon=True).start()
+    else:
+        logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
+listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
+listen_keyboard_thread.start()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -395,5 +398,6 @@ if __name__ == '__main__':
             wrist_img_shm.close()
         if args.record:
             recorder.close()
+        listen_keyboard_thread.join()
         logger_mp.info("Finally, exiting program...")
         exit(0)
