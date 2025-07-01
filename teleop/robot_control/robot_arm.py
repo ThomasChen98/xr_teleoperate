@@ -12,7 +12,7 @@ from unitree_sdk2py.idl.unitree_go.msg.dds_ import ( LowCmd_  as go_LowCmd, LowS
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
 
 import logging_mp
-logger_mp = logging_mp.get_logger(__name__)
+logger_mp = logging_mp.get_logger(__name__,level=logging_mp.DEBUG)
 
 kTopicLowCommand_Debug  = "rt/lowcmd"
 kTopicLowCommand_Motion = "rt/arm_sdk"
@@ -233,7 +233,7 @@ class G1_29_ArmController:
                         time.sleep(0.02)
                 logger_mp.info("[G1_29_ArmController] both arms have reached the home position.")
                 break
-            attempts += 1
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -1104,7 +1104,7 @@ if __name__ == "__main__":
     import pinocchio as pin 
 
     arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
-    arm = G1_29_ArmController()
+    arm = G1_29_ArmController(simulation_mode=True)
     # arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = False)
     # arm = G1_23_ArmController()
     # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = False)
