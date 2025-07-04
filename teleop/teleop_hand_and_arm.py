@@ -47,10 +47,10 @@ def on_press(key):
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
-    elif key == 'q':
+    elif key == 's':
         stop_listening()
         running = False
-    elif key == 's':
+    elif key == 'q':
         should_toggle_recording = True
 threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press}, daemon=True).start()
 
@@ -172,6 +172,14 @@ if __name__ == '__main__':
     if args.is_use_sim:
         reset_pose_publisher = ChannelPublisher("rt/reset_pose/cmd", String_)
         reset_pose_publisher.Init()
+        from teleop.utils.sim_state_topic import start_sim_state_subscribe
+        sim_state_subscriber = start_sim_state_subscribe()
+        # from teleop.utils.sim_state_client import SimStateClient
+        # sim_state_client = SimStateClient()
+        # sim_state_client.Init()
+        # sim_state_client.SetTimeout(5.0)
+        # sim_state_client.WaitLeaseApplied()
+        # c=1
     # xr mode
     if args.xr_mode == 'controller' and not args.debug:
         from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
@@ -196,12 +204,12 @@ if __name__ == '__main__':
                 tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
+                if key == ord('s'):
                     stop_listening()
                     running = False
                     if args.is_use_sim:
                         publish_reset_category(2, reset_pose_publisher)
-                elif key == ord('s'):
+                elif key == ord('q'):
                     should_toggle_recording = True
                 elif key == ord('a'):
                     if args.is_use_sim:
@@ -237,7 +245,7 @@ if __name__ == '__main__':
                 with right_gripper_value.get_lock():
                     right_gripper_value.value = tele_data.right_pinch_value
             else:
-                pass
+                pass        
             
             # high level control
             if args.xr_mode == 'controller' and not args.debug:
@@ -381,7 +389,11 @@ if __name__ == '__main__':
                             "qpos": current_body_action,
                         }, 
                     }
-                    recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
+                    if args.is_use_sim:
+                        sim_state = sim_state_subscriber.read_data()            
+                        recorder.add_item(colors=colors, depths=depths, states=states, actions=actions, sim_state=sim_state)
+                    else:
+                        recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
 
             current_time = time.time()
             time_elapsed = current_time - start_time

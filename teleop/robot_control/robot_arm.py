@@ -81,7 +81,7 @@ class G1_29_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        ChannelFactoryInitialize(1)
         if self.debug_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         else:
