@@ -324,7 +324,12 @@ class DexPilotOptimizer(Optimizer):
         origin_link_index, task_link_index = self.generate_link_indices(self.num_fingers)
 
         if target_link_human_indices is None:
-            target_link_human_indices = (np.stack([origin_link_index, task_link_index], axis=0) * 4).astype(int)
+            logical_indices = np.stack([origin_link_index, task_link_index], axis=0)
+            target_link_human_indices = np.where(
+                logical_indices > 0,
+                logical_indices * 5 - 1,
+                0
+            ).astype(int)
         link_names = [wrist_link_name] + finger_tip_link_names
         target_origin_link_names = [link_names[index] for index in origin_link_index]
         target_task_link_names = [link_names[index] for index in task_link_index]
@@ -370,13 +375,13 @@ class DexPilotOptimizer(Optimizer):
         origin_link_index = []
         task_link_index = []
 
-        # Add indices for connections between fingers
+        # S1：Add indices for connections between fingers
         for i in range(1, num_fingers):
             for j in range(i + 1, num_fingers + 1):
                 origin_link_index.append(j)
                 task_link_index.append(i)
 
-        # Add indices for connections to the base (0)
+        # S2：Add indices for connections to the base (0)
         for i in range(1, num_fingers + 1):
             origin_link_index.append(0)
             task_link_index.append(i)

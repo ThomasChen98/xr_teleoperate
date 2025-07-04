@@ -19,31 +19,33 @@ from .yourdfpy import DUMMY_JOINT_NAMES
 class RetargetingConfig:
     type: str
     urdf_path: str
+    target_joint_names: Optional[List[str]] = None
 
     # Whether to add free joint to the root of the robot. Free joint enable the robot hand move freely in the space
     add_dummy_free_joint: bool = False
 
-    # Source refers to the retargeting input, which usually corresponds to the human hand
-    # The joint indices of human hand joint which corresponds to each link in the target_link_names
-    target_link_human_indices: Optional[np.ndarray] = None
-
+    # DexPilot retargeting related
     # The link on the robot hand which corresponding to the wrist of human hand
     wrist_link_name: Optional[str] = None
+    # DexPilot retargeting link names
+    finger_tip_link_names: Optional[List[str]] = None
+    target_link_human_indices_dexpilot: Optional[np.ndarray] = None
 
     # Position retargeting link names
     target_link_names: Optional[List[str]] = None
+    target_link_human_indices_position: Optional[np.ndarray] = None
 
     # Vector retargeting link names
-    target_joint_names: Optional[List[str]] = None
     target_origin_link_names: Optional[List[str]] = None
     target_task_link_names: Optional[List[str]] = None
-
-    # DexPilot retargeting link names
-    finger_tip_link_names: Optional[List[str]] = None
+    target_link_human_indices_vector: Optional[np.ndarray] = None
 
     # Scaling factor for vector retargeting only
     # For example, Allegro is 1.6 times larger than normal human hand, then this scaling factor should be 1.6
     scaling_factor: float = 1.0
+
+    # Low pass filter
+    low_pass_alpha: float = 0.1
 
     # Optimization parameters
     normal_delta: float = 4e-3
@@ -58,9 +60,6 @@ class RetargetingConfig:
 
     # Mimic joint tag
     ignore_mimic_joint: bool = False
-
-    # Low pass filter
-    low_pass_alpha: float = 0.1
 
     _TYPE = ["vector", "position", "dexpilot"]
     _DEFAULT_URDF_DIR = "./"
@@ -78,24 +77,24 @@ class RetargetingConfig:
                 raise ValueError(f"Vector retargeting requires: target_origin_link_names + target_task_link_names")
             if len(self.target_task_link_names) != len(self.target_origin_link_names):
                 raise ValueError(f"Vector retargeting origin and task links dim mismatch")
-            if self.target_link_human_indices.shape != (2, len(self.target_origin_link_names)):
+            if self.target_link_human_indices_vector.shape != (2, len(self.target_origin_link_names)):
                 raise ValueError(f"Vector retargeting link names and link indices dim mismatch")
-            if self.target_link_human_indices is None:
-                raise ValueError(f"Vector retargeting requires: target_link_human_indices")
+            if self.target_link_human_indices_vector is None:
+                raise ValueError(f"Vector retargeting requires: target_link_human_indices_vector")
 
         elif self.type == "position":
             if self.target_link_names is None:
                 raise ValueError(f"Position retargeting requires: target_link_names")
-            self.target_link_human_indices = self.target_link_human_indices.squeeze()
-            if self.target_link_human_indices.shape != (len(self.target_link_names),):
+            self.target_link_human_indices_position = self.target_link_human_indices_position.squeeze()
+            if self.target_link_human_indices_position.shape != (len(self.target_link_names),):
                 raise ValueError(f"Position retargeting link names and link indices dim mismatch")
-            if self.target_link_human_indices is None:
-                raise ValueError(f"Position retargeting requires: target_link_human_indices")
+            if self.target_link_human_indices_position is None:
+                raise ValueError(f"Position retargeting requires: target_link_human_indices_position")
 
         elif self.type == "dexpilot":
             if self.finger_tip_link_names is None or self.wrist_link_name is None:
                 raise ValueError(f"Position retargeting requires: finger_tip_link_names + wrist_link_name")
-            if self.target_link_human_indices is not None:
+            if self.target_link_human_indices_dexpilot is not None:
                 print(
                     "\033[33m",
                     "Target link human indices is provided in the DexPilot retargeting config, which is uncommon.\n"
@@ -132,8 +131,13 @@ class RetargetingConfig:
 
     @classmethod
     def from_dict(cls, cfg: Dict[str, Any], override: Optional[Dict] = None):
-        if "target_link_human_indices" in cfg:
-            cfg["target_link_human_indices"] = np.array(cfg["target_link_human_indices"])
+        if "target_link_human_indices_position" in cfg:
+            cfg["target_link_human_indices_position"] = np.array(cfg["target_link_human_indices_position"])
+        if "target_link_human_indices_vector" in cfg:
+            cfg["target_link_human_indices_vector"] = np.array(cfg["target_link_human_indices_vector"])
+        if "target_link_human_indices_dexpilot" in cfg:
+            cfg["target_link_human_indices_dexpilot"] = np.array(cfg["target_link_human_indices_dexpilot"])
+
         if override is not None:
             for key, value in override.items():
                 cfg[key] = value
@@ -170,7 +174,7 @@ class RetargetingConfig:
                 robot,
                 joint_names,
                 target_link_names=self.target_link_names,
-                target_link_human_indices=self.target_link_human_indices,
+                target_link_human_indices=self.target_link_human_indices_position,
                 norm_delta=self.normal_delta,
                 huber_delta=self.huber_delta,
             )
@@ -180,7 +184,7 @@ class RetargetingConfig:
                 joint_names,
                 target_origin_link_names=self.target_origin_link_names,
                 target_task_link_names=self.target_task_link_names,
-                target_link_human_indices=self.target_link_human_indices,
+                target_link_human_indices=self.target_link_human_indices_vector,
                 scaling=self.scaling_factor,
                 norm_delta=self.normal_delta,
                 huber_delta=self.huber_delta,
@@ -191,7 +195,7 @@ class RetargetingConfig:
                 joint_names,
                 finger_tip_link_names=self.finger_tip_link_names,
                 wrist_link_name=self.wrist_link_name,
-                target_link_human_indices=self.target_link_human_indices,
+                target_link_human_indices=self.target_link_human_indices_dexpilot,
                 scaling=self.scaling_factor,
                 project_dist=self.project_dist,
                 escape_dist=self.escape_dist,

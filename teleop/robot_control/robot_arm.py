@@ -59,12 +59,12 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self, debug_mode = True, is_use_sim = False):
+    def __init__(self, motion_mode = False, simulation_mode = False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
-        self.debug_mode = debug_mode
-        self.is_use_sim = is_use_sim
+        self.motion_mode = motion_mode
+        self.simulation_mode = simulation_mode
         self.kp_high = 300.0
         self.kd_high = 3.0
         self.kp_low = 80.0
@@ -81,11 +81,11 @@ class G1_29_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(1)
-        if self.debug_mode:
-            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
-        else:
+        ChannelFactoryInitialize(0)
+        if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
+        else:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -159,7 +159,7 @@ class G1_29_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
-        if not self.debug_mode:
+        if self.motion_mode:
             self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
 
         while True:
@@ -169,7 +169,7 @@ class G1_29_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -218,19 +218,22 @@ class G1_29_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(14)
             # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                if not self.debug_mode:
+                if self.motion_mode:
                     for weight in np.arange(1, 0, -0.01):
                         self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
                 logger_mp.info("[G1_29_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -338,8 +341,8 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self, is_use_sim = False):
-        self.is_use_sim = is_use_sim
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
@@ -443,7 +446,7 @@ class G1_23_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -492,15 +495,18 @@ class G1_23_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[G1_23_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(10)
             # self.tauff_target = np.zeros(10)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 logger_mp.info("[G1_23_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -600,8 +606,8 @@ class G1_23_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class H1_2_ArmController:
-    def __init__(self, is_use_sim = False):
-        self.is_use_sim = is_use_sim
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize H1_2_ArmController...")
         self.q_target = np.zeros(14)
@@ -623,7 +629,7 @@ class H1_2_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        ChannelFactoryInitialize(1)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
@@ -705,7 +711,7 @@ class H1_2_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -754,15 +760,18 @@ class H1_2_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[H1_2_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(14)
             # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 logger_mp.info("[H1_2_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -869,8 +878,8 @@ class H1_2_JointIndex(IntEnum):
     kNotUsedJoint7 = 34
 
 class H1_ArmController:
-    def __init__(self, is_use_sim = False):
-        self.is_use_sim = is_use_sim
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize H1_ArmController...")
         self.q_target = np.zeros(8)
@@ -966,7 +975,7 @@ class H1_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            if self.is_use_sim:
+            if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
             else:
                 cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
@@ -1011,15 +1020,18 @@ class H1_ArmController:
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
         logger_mp.info("[H1_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(8)
             # self.tauff_target = np.zeros(8)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 logger_mp.info("[H1_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -1092,7 +1104,7 @@ if __name__ == "__main__":
     import pinocchio as pin 
 
     arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
-    arm = G1_29_ArmController()
+    arm = G1_29_ArmController(simulation_mode=True)
     # arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = False)
     # arm = G1_23_ArmController()
     # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = False)

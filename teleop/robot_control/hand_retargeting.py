@@ -38,6 +38,8 @@ class HandRetargeting:
 
             self.left_retargeting_joint_names = self.left_retargeting.joint_names
             self.right_retargeting_joint_names = self.right_retargeting.joint_names
+            self.left_indices = self.left_retargeting.optimizer.target_link_human_indices
+            self.right_indices = self.right_retargeting.optimizer.target_link_human_indices
 
             if hand_type == HandType.UNITREE_DEX3 or hand_type == HandType.UNITREE_DEX3_Unit_Test:
                 # In section "Sort by message structure" of https://support.unitree.com/home/en/G1_developer/dexterous_hand
