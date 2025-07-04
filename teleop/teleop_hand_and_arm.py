@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
-    parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'],default="gripper", help='Select end effector controller')
+    parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
 
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
     parser.add_argument('--motion', action = 'store_true', help = 'Enable motion control mode')
@@ -177,13 +177,15 @@ if __name__ == '__main__':
         reset_pose_publisher.Init()
         from teleop.utils.sim_state_topic import start_sim_state_subscribe
         sim_state_subscriber = start_sim_state_subscribe()
-    # xr mode
+
+    # controller + motion mode
     if args.xr_mode == 'controller' and args.motion:
         from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
         sport_client = LocoClient()
         sport_client.SetTimeout(0.0001)
         sport_client.Init()
     
+    # record + headless mode
     if args.record and args.headless:
         recorder = EpisodeWriter(task_dir = args.task_dir, frequency = args.frequency, rerun_log = False)
     elif args.record and not args.headless:
