@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
-    parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'], help='Select end effector controller')
+    parser.add_argument('--ee', type=str, choices=['dex3', 'gripper', 'inspire1'],default="gripper", help='Select end effector controller')
 
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
     parser.add_argument('--motion', action = 'store_true', help = 'Enable motion control mode')
@@ -201,12 +201,12 @@ if __name__ == '__main__':
                 tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('s'):
+                if key == ord('q'):
                     stop_listening()
                     running = False
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
-                elif key == ord('q'):
+                elif key == ord('s'):
                     should_toggle_recording = True
                 elif key == ord('a'):
                     if args.sim:
@@ -386,7 +386,7 @@ if __name__ == '__main__':
                             "qpos": current_body_action,
                         }, 
                     }
-                    if args.is_use_sim:
+                    if args.sim:
                         sim_state = sim_state_subscriber.read_data()            
                         recorder.add_item(colors=colors, depths=depths, states=states, actions=actions, sim_state=sim_state)
                     else:
