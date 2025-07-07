@@ -29,6 +29,7 @@
     </tr>
   </table>
 </p>
+
 # 🔖 Release Note
 
 1. **Upgraded the Vuer library** to support more XR device modes. The project has been renamed from **`avp_teleoperate`** to **`xr_teleoperate`** to better reflect its broader scope — now supporting not only Apple Vision Pro but also Meta Quest 3 (with controllers) and PICO 4 Ultra Enterprise (with controllers).
@@ -134,7 +135,7 @@ For more information, you can refer to [Official Documentation ](https://support
 # Install unitree_sdk2_python library which handles communication with the robot
 (tv) unitree@Host:~$ git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
 (tv) unitree@Host:~$ cd unitree_sdk2_python
-(tv) unitree@Host:~$ pip install -e .
+(tv) unitree@Host:~/unitree_sdk2_python$ pip install -e .
 ```
 
 > **Note 1**: The [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) in the original h1_2 branch was a temporary version. It has now been fully migrated to the official Python-based control and communication library: [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python).

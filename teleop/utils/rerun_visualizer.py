@@ -5,6 +5,7 @@ import time
 import rerun as rr
 import rerun.blueprint as rrb
 from datetime import datetime
+os.environ["RUST_LOG"] = "error"
 
 class RerunEpisodeReader:
     def __init__(self, task_dir = ".", json_file="data.json"):

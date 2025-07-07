@@ -28,6 +28,7 @@
     </tr>
   </table>
 </p>
+
 # 🔖 更新内容
 
 1. **Vuerライブラリをアップグレード**し、より多くのXRデバイスモードに対応しました。これに伴い、プロジェクト名を **`avp_teleoperate`** から **`xr_teleoperate`** に変更しました。従来の Apple Vision Pro に加え、**Meta Quest 3（コントローラー対応）** や **PICO 4 Ultra Enterprise（コントローラー対応）** にも対応しています。
@@ -129,7 +130,7 @@ Ubuntu 20.04と22.04でテスト済みです。他のOSでは設定が異なる�
 # ロボット通信用ライブラリインストール
 (tv) unitree@Host:~$ git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
 (tv) unitree@Host:~$ cd unitree_sdk2_python
-(tv) unitree@Host:~$ pip install -e .
+(tv) unitree@Host:~/unitree_sdk2_python$ pip install -e .
 ```
 
 > **注1**: 元のh1_2ブランチのunitree_dds_wrapperは暫定版でした。現在は公式Python制御ライブラリunitree_sdk2_pythonに移行済みです。

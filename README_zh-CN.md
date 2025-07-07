@@ -29,6 +29,7 @@
     </tr>
   </table>
 </p>
+
 # 🔖 发布说明
 
 1. 升级 [Vuer](https://github.com/vuer-ai/vuer) 库，扩展了设备支持模式。为更准确反映功能范围，项目由 **avp_teleoperate** 更名为 **xr_teleoperate**，从最初仅支持 Apple Vision Pro，扩展至兼容 Meta Quest 3（含手柄） 与 PICO 4 Ultra Enterprise（含手柄） 等多款 XR 设备。
@@ -129,7 +130,7 @@
 # 安装 unitree_sdk2_python 库，该库负责开发设备与机器人之间的通信控制功能
 (tv) unitree@Host:~$ git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
 (tv) unitree@Host:~$ cd unitree_sdk2_python
-(tv) unitree@Host:~$ pip install -e .
+(tv) unitree@Host:~/unitree_sdk2_python$ pip install -e .
 ```
 
 > 注意1：原 h1_2 分支中的 [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) 为临时版本，现已全面转换到上述正式的 Python 版控制通信库：[unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python)
