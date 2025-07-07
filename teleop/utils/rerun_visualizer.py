@@ -5,6 +5,7 @@ import time
 import rerun as rr
 import rerun.blueprint as rrb
 from datetime import datetime
+os.environ["RUST_LOG"] = "error"
 
 class RerunEpisodeReader:
     def __init__(self, task_dir = ".", json_file="data.json"):
@@ -89,8 +90,8 @@ class RerunLogger:
         data_plot_paths = [
                            f"{self.prefix}left_arm", 
                            f"{self.prefix}right_arm", 
-                           f"{self.prefix}left_hand", 
-                           f"{self.prefix}right_hand"
+                           f"{self.prefix}left_ee", 
+                           f"{self.prefix}right_ee"
         ]
         for plot_path in data_plot_paths:
             view = rrb.TimeSeriesView(
@@ -141,7 +142,7 @@ class RerunLogger:
         # Log states
         states = item_data.get('states', {}) or {}
         for part, state_info in states.items():
-            if state_info:
+            if part != "body" and state_info:
                 values = state_info.get('qpos', [])
                 for idx, val in enumerate(values):
                     rr.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalar(val))
@@ -149,7 +150,7 @@ class RerunLogger:
         # Log actions
         actions = item_data.get('actions', {}) or {}
         for part, action_info in actions.items():
-            if action_info:
+            if part != "body" and action_info:
                 values = action_info.get('qpos', [])
                 for idx, val in enumerate(values):
                     rr.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalar(val))
@@ -188,6 +189,9 @@ if __name__ == "__main__":
     import gdown
     import zipfile
     import os
+    import logging_mp
+    logger_mp = logging_mp.get_logger(__name__, level=logging_mp.INFO)
+
     zip_file = "rerun_testdata.zip"
     zip_file_download_url = "https://drive.google.com/file/d/1f5UuFl1z_gaByg_7jDRj1_NxfJZh2evD/view?usp=sharing"
     unzip_file_output_dir = "./testdata"
@@ -195,16 +199,16 @@ if __name__ == "__main__":
         if not os.path.exists(zip_file):
             file_id = zip_file_download_url.split('/')[5]
             gdown.download(id=file_id, output=zip_file, quiet=False)
-            print("download ok.")
+            logger_mp.info("download ok.")
         if not os.path.exists(unzip_file_output_dir):
             os.makedirs(unzip_file_output_dir)
         with zipfile.ZipFile(zip_file, 'r') as zip_ref:
             zip_ref.extractall(unzip_file_output_dir)
-        print("uncompress ok.")
+        logger_mp.info("uncompress ok.")
         os.remove(zip_file)
-        print("clean file ok.")
+        logger_mp.info("clean file ok.")
     else:
-        print("rerun_testdata exits.")
+        logger_mp.info("rerun_testdata exits.")
 
 
     episode_reader = RerunEpisodeReader(task_dir = unzip_file_output_dir)
@@ -212,20 +216,20 @@ if __name__ == "__main__":
     user_input = input("Please enter the start signal (enter 'off' or 'on' to start the subsequent program):\n")
     if user_input.lower() == 'off':
         episode_data6 = episode_reader.return_episode_data(6)
-        print("Starting offline visualization...")
+        logger_mp.info("Starting offline visualization...")
         offline_logger = RerunLogger(prefix="offline/")
         offline_logger.log_episode_data(episode_data6)
-        print("Offline visualization completed.")
+        logger_mp.info("Offline visualization completed.")
 
     # TEST EXAMPLE 2 : ONLINE DATA TEST, SLIDE WINDOW SIZE IS 60, MEMORY LIMIT IS 50MB
     if user_input.lower() == 'on':
         episode_data8 = episode_reader.return_episode_data(8)
-        print("Starting online visualization with fixed idx size...")
+        logger_mp.info("Starting online visualization with fixed idx size...")
         online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit='50MB')
         for item_data in episode_data8:
             online_logger.log_item_data(item_data)
             time.sleep(0.033) # 30hz
-        print("Online visualization completed.")
+        logger_mp.info("Online visualization completed.")
 
 
     # # TEST DATA OF data_dir
@@ -236,9 +240,9 @@ if __name__ == "__main__":
     # episode_data8 = episode_reader2.return_episode_data(episode_data_number)
     # if user_input.lower() == 'on':
     #     # Example 2: Offline Visualization with Fixed Time Window
-    #     print("Starting offline visualization with fixed idx size...")
+    #     logger_mp.info("Starting offline visualization with fixed idx size...")
     #     online_logger = RerunLogger(prefix="offline/", IdxRangeBoundary = 60)
     #     for item_data in episode_data8:
     #         online_logger.log_item_data(item_data)
     #         time.sleep(0.033) # 30hz
-    #     print("Offline visualization completed.")
+    #     logger_mp.info("Offline visualization completed.")

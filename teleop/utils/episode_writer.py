@@ -7,22 +7,24 @@ import time
 from .rerun_visualizer import RerunLogger
 from queue import Queue, Empty
 from threading import Thread
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 
 class EpisodeWriter():
     def __init__(self, task_dir, frequency=30, image_size=[640, 480], rerun_log = True):
         """
         image_size: [width, height]
         """
-        print("==> EpisodeWriter initializing...\n")
+        logger_mp.info("==> EpisodeWriter initializing...\n")
         self.task_dir = task_dir
         self.frequency = frequency
         self.image_size = image_size
 
         self.rerun_log = rerun_log
         if self.rerun_log:
-            print("==> RerunLogger initializing...\n")
+            logger_mp.info("==> RerunLogger initializing...\n")
             self.rerun_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit = "300MB")
-            print("==> RerunLogger initializing ok.\n")
+            logger_mp.info("==> RerunLogger initializing ok.\n")
         
         self.data = {}
         self.episode_data = []
@@ -32,22 +34,22 @@ class EpisodeWriter():
             episode_dirs = [episode_dir for episode_dir in os.listdir(self.task_dir) if 'episode_' in episode_dir]
             episode_last = sorted(episode_dirs)[-1] if len(episode_dirs) > 0 else None
             self.episode_id = 0 if episode_last is None else int(episode_last.split('_')[-1])
-            print(f"==> task_dir directory already exist, now self.episode_id is:{self.episode_id}\n")
+            logger_mp.info(f"==> task_dir directory already exist, now self.episode_id is:{self.episode_id}\n")
         else:
             os.makedirs(self.task_dir)
-            print(f"==> episode directory does not exist, now create one.\n")
+            logger_mp.info(f"==> episode directory does not exist, now create one.\n")
         self.data_info()
         self.text_desc()
 
         self.is_available = True  # Indicates whether the class is available for new operations
         # Initialize the queue and worker thread
-        self.item_data_queue = Queue(maxsize=100)
+        self.item_data_queue = Queue(-1)
         self.stop_worker = False
         self.need_save = False  # Flag to indicate when save_episode is triggered
         self.worker_thread = Thread(target=self.process_queue)
         self.worker_thread.start()
 
-        print("==> EpisodeWriter initialized successfully.\n")
+        logger_mp.info("==> EpisodeWriter initialized successfully.\n")
 
     def data_info(self, version='1.0.0', date=None, author=None):
         self.info = {
@@ -59,16 +61,17 @@ class EpisodeWriter():
                 "audio": {"sample_rate": 16000, "channels": 1, "format":"PCM", "bits":16},    # PCM_S16
                 "joint_names":{
                     "left_arm":   ['kLeftShoulderPitch' ,'kLeftShoulderRoll', 'kLeftShoulderYaw', 'kLeftElbow', 'kLeftWristRoll', 'kLeftWristPitch', 'kLeftWristyaw'],
-                    "left_hand":  [],
+                    "left_ee":  [],
                     "right_arm":  [],
-                    "right_hand": [],
+                    "right_ee": [],
                     "body":       [],
                 },
 
                 "tactile_names": {
-                    "left_hand": [],
-                    "right_hand": [],
+                    "left_ee": [],
+                    "right_ee": [],
                 }, 
+                "sim_state": ""
             }
     def text_desc(self):
         self.text = {
@@ -87,7 +90,7 @@ class EpisodeWriter():
             Once successfully created, this function will only be available again after save_episode complete its save task.
         """
         if not self.is_available:
-            print("==> The class is currently unavailable for new operations. Please wait until ongoing tasks are completed.")
+            logger_mp.info("==> The class is currently unavailable for new operations. Please wait until ongoing tasks are completed.")
             return False  # Return False if the class is unavailable
 
         # Reset episode-related data and create necessary directories
@@ -108,10 +111,10 @@ class EpisodeWriter():
             self.online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit="300MB")
 
         self.is_available = False  # After the episode is created, the class is marked as unavailable until the episode is successfully saved
-        print(f"==> New episode created: {self.episode_dir}")
+        logger_mp.info(f"==> New episode created: {self.episode_dir}")
         return True  # Return True if the episode is successfully created
         
-    def add_item(self, colors, depths=None, states=None, actions=None, tactiles=None, audios=None):
+    def add_item(self, colors, depths=None, states=None, actions=None, tactiles=None, audios=None,sim_state=None):
         # Increment the item ID
         self.item_id += 1
         # Create the item data dictionary
@@ -123,6 +126,7 @@ class EpisodeWriter():
             'actions': actions,
             'tactiles': tactiles,
             'audios': audios,
+            'sim_state': sim_state,
         }
         # Enqueue the item data
         self.item_data_queue.put(item_data)
@@ -135,7 +139,7 @@ class EpisodeWriter():
                 try:
                     self._process_item_data(item_data)
                 except Exception as e:
-                    print(f"Error processing item_data (idx={item_data['idx']}): {e}")
+                    logger_mp.info(f"Error processing item_data (idx={item_data['idx']}): {e}")
                 self.item_data_queue.task_done()
             except Empty:
                 pass
@@ -155,7 +159,7 @@ class EpisodeWriter():
             for idx_color, (color_key, color) in enumerate(colors.items()):
                 color_name = f'{str(idx).zfill(6)}_{color_key}.jpg'
                 if not cv2.imwrite(os.path.join(self.color_dir, color_name), color):
-                    print(f"Failed to save color image.")
+                    logger_mp.info(f"Failed to save color image.")
                 item_data['colors'][color_key] = os.path.join('colors', color_name)
 
         # Save depths
@@ -163,7 +167,7 @@ class EpisodeWriter():
             for idx_depth, (depth_key, depth) in enumerate(depths.items()):
                 depth_name = f'{str(idx).zfill(6)}_{depth_key}.jpg'
                 if not cv2.imwrite(os.path.join(self.depth_dir, depth_name), depth):
-                    print(f"Failed to save depth image.")
+                    logger_mp.info(f"Failed to save depth image.")
                 item_data['depths'][depth_key] = os.path.join('depths', depth_name)
 
         # Save audios
@@ -179,7 +183,7 @@ class EpisodeWriter():
         # Log data if necessary
         if self.rerun_log:
             curent_record_time = time.time()
-            print(f"==> episode_id:{self.episode_id}  item_id:{self.item_id}  current_time:{curent_record_time}")
+            logger_mp.info(f"==> episode_id:{self.episode_id}  item_id:{idx}  current_time:{curent_record_time}")
             self.rerun_logger.log_item_data(item_data)
 
     def save_episode(self):
@@ -187,7 +191,7 @@ class EpisodeWriter():
         Trigger the save operation. This sets the save flag, and the process_queue thread will handle it.
         """
         self.need_save = True  # Set the save flag
-        print(f"==> Episode saved start...")
+        logger_mp.info(f"==> Episode saved start...")
 
     def _save_episode(self):
         """
@@ -200,7 +204,7 @@ class EpisodeWriter():
             jsonf.write(json.dumps(self.data, indent=4, ensure_ascii=False))
         self.need_save = False     # Reset the save flag
         self.is_available = True   # Mark the class as available after saving
-        print(f"==> Episode saved successfully to {self.json_path}.")
+        logger_mp.info(f"==> Episode saved successfully to {self.json_path}.")
 
     def close(self):
         """

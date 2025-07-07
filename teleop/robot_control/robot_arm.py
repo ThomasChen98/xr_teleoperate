@@ -11,8 +11,13 @@ from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import ( LowCmd_  as go_LowCmd, LowState_ as go_LowState)  # idl for h1
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
 
-kTopicLowCommand = "rt/lowcmd"
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
+
+kTopicLowCommand_Debug  = "rt/lowcmd"
+kTopicLowCommand_Motion = "rt/arm_sdk"
 kTopicLowState = "rt/lowstate"
+
 G1_29_Num_Motors = 35
 G1_23_Num_Motors = 35
 H1_2_Num_Motors = 35
@@ -54,11 +59,12 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self):
-        print("Initialize G1_29_ArmController...")
+    def __init__(self, motion_mode = False, simulation_mode = False):
+        logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
-
+        self.motion_mode = motion_mode
+        self.simulation_mode = simulation_mode
         self.kp_high = 300.0
         self.kd_high = 3.0
         self.kp_low = 80.0
@@ -76,7 +82,10 @@ class G1_29_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, hg_LowCmd)
+        if self.motion_mode:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
+        else:
+            self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -89,7 +98,8 @@ class G1_29_ArmController:
 
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
-            print("[G1_29_ArmController] Waiting to subscribe dds...")
+            logger_mp.warning("[G1_29_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[G1_29_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
         self.crc = CRC()
@@ -98,9 +108,9 @@ class G1_29_ArmController:
         self.msg.mode_machine = self.get_mode_machine()
 
         self.all_motor_q = self.get_current_motor_q()
-        print(f"Current all body motor state q:\n{self.all_motor_q} \n")
-        print(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        print("Lock all joints except two arms...\n")
+        logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
+        logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
+        logger_mp.info("Lock all joints except two arms...\n")
 
         arm_indices = set(member.value for member in G1_29_JointArmIndex)
         for id in G1_29_JointIndex:
@@ -120,7 +130,7 @@ class G1_29_ArmController:
                     self.msg.motor_cmd[id].kp = self.kp_high
                     self.msg.motor_cmd[id].kd = self.kd_high
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        print("Lock OK!\n")
+        logger_mp.info("Lock OK!\n")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -128,7 +138,7 @@ class G1_29_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        print("Initialize G1_29_ArmController OK!\n")
+        logger_mp.info("Initialize G1_29_ArmController OK!\n")
 
     def _subscribe_motor_state(self):
         while True:
@@ -149,6 +159,9 @@ class G1_29_ArmController:
         return cliped_arm_q_target
 
     def _ctrl_motor_state(self):
+        if self.motion_mode:
+            self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0;
+
         while True:
             start_time = time.time()
 
@@ -156,12 +169,15 @@ class G1_29_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.simulation_mode:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(G1_29_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
                 self.msg.motor_cmd[id].dq = 0
-                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]      
+                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]   
 
             self.msg.crc = self.crc.Crc(self.msg)
             self.lowcmd_publisher.Write(self.msg)
@@ -174,8 +190,8 @@ class G1_29_ArmController:
             all_t_elapsed = current_time - start_time
             sleep_time = max(0, (self.control_dt - all_t_elapsed))
             time.sleep(sleep_time)
-            # print(f"arm_velocity_limit:{self.arm_velocity_limit}")
-            # print(f"sleep_time:{sleep_time}")
+            # logger_mp.debug(f"arm_velocity_limit:{self.arm_velocity_limit}")
+            # logger_mp.debug(f"sleep_time:{sleep_time}")
 
     def ctrl_dual_arm(self, q_target, tauff_target):
         '''Set control target values q & tau of the left and right arm motors.'''
@@ -201,16 +217,23 @@ class G1_29_ArmController:
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
-        print("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
+        logger_mp.info("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(14)
             # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                print("[G1_29_ArmController] both arms have reached the home position.")
+                if self.motion_mode:
+                    for weight in np.arange(1, 0, -0.01):
+                        self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
+                        time.sleep(0.02)
+                logger_mp.info("[G1_29_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -318,8 +341,10 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self):
-        print("Initialize G1_23_ArmController...")
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
+        
+        logger_mp.info("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
         self.tauff_target = np.zeros(10)
 
@@ -340,7 +365,7 @@ class G1_23_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, hg_LowCmd)
+        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -353,7 +378,8 @@ class G1_23_ArmController:
 
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
-            print("[G1_23_ArmController] Waiting to subscribe dds...")
+            logger_mp.warning("[G1_23_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[G1_23_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
         self.crc = CRC()
@@ -362,9 +388,9 @@ class G1_23_ArmController:
         self.msg.mode_machine = self.get_mode_machine()
 
         self.all_motor_q = self.get_current_motor_q()
-        print(f"Current all body motor state q:\n{self.all_motor_q} \n")
-        print(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        print("Lock all joints except two arms...\n")
+        logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
+        logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
+        logger_mp.info("Lock all joints except two arms...\n")
 
         arm_indices = set(member.value for member in G1_23_JointArmIndex)
         for id in G1_23_JointIndex:
@@ -384,7 +410,7 @@ class G1_23_ArmController:
                     self.msg.motor_cmd[id].kp = self.kp_high
                     self.msg.motor_cmd[id].kd = self.kd_high
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        print("Lock OK!\n")
+        logger_mp.info("Lock OK!\n")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -392,7 +418,7 @@ class G1_23_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        print("Initialize G1_23_ArmController OK!\n")
+        logger_mp.info("Initialize G1_23_ArmController OK!\n")
 
     def _subscribe_motor_state(self):
         while True:
@@ -420,7 +446,10 @@ class G1_23_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.simulation_mode:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(G1_23_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
@@ -438,8 +467,8 @@ class G1_23_ArmController:
             all_t_elapsed = current_time - start_time
             sleep_time = max(0, (self.control_dt - all_t_elapsed))
             time.sleep(sleep_time)
-            # print(f"arm_velocity_limit:{self.arm_velocity_limit}")
-            # print(f"sleep_time:{sleep_time}")
+            # logger_mp.debug(f"arm_velocity_limit:{self.arm_velocity_limit}")
+            # logger_mp.debug(f"sleep_time:{sleep_time}")
 
     def ctrl_dual_arm(self, q_target, tauff_target):
         '''Set control target values q & tau of the left and right arm motors.'''
@@ -465,16 +494,19 @@ class G1_23_ArmController:
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
-        print("[G1_23_ArmController] ctrl_dual_arm_go_home start...")
+        logger_mp.info("[G1_23_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(10)
             # self.tauff_target = np.zeros(10)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                print("[G1_23_ArmController] both arms have reached the home position.")
+                logger_mp.info("[G1_23_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -574,8 +606,10 @@ class G1_23_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class H1_2_ArmController:
-    def __init__(self):
-        print("Initialize H1_2_ArmController...")
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
+        
+        logger_mp.info("Initialize H1_2_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
 
@@ -596,7 +630,7 @@ class H1_2_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, hg_LowCmd)
+        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
         self.lowstate_subscriber.Init()
@@ -609,7 +643,8 @@ class H1_2_ArmController:
 
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
-            print("[H1_2_ArmController] Waiting to subscribe dds...")
+            logger_mp.warning("[H1_2_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[H1_2_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
         self.crc = CRC()
@@ -618,9 +653,9 @@ class H1_2_ArmController:
         self.msg.mode_machine = self.get_mode_machine()
 
         self.all_motor_q = self.get_current_motor_q()
-        print(f"Current all body motor state q:\n{self.all_motor_q} \n")
-        print(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        print("Lock all joints except two arms...\n")
+        logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
+        logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
+        logger_mp.info("Lock all joints except two arms...\n")
 
         arm_indices = set(member.value for member in H1_2_JointArmIndex)
         for id in H1_2_JointIndex:
@@ -640,7 +675,7 @@ class H1_2_ArmController:
                     self.msg.motor_cmd[id].kp = self.kp_high
                     self.msg.motor_cmd[id].kd = self.kd_high
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        print("Lock OK!\n")
+        logger_mp.info("Lock OK!\n")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -648,7 +683,7 @@ class H1_2_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        print("Initialize H1_2_ArmController OK!\n")
+        logger_mp.info("Initialize H1_2_ArmController OK!\n")
 
     def _subscribe_motor_state(self):
         while True:
@@ -676,7 +711,10 @@ class H1_2_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.simulation_mode:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(H1_2_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
@@ -694,8 +732,8 @@ class H1_2_ArmController:
             all_t_elapsed = current_time - start_time
             sleep_time = max(0, (self.control_dt - all_t_elapsed))
             time.sleep(sleep_time)
-            # print(f"arm_velocity_limit:{self.arm_velocity_limit}")
-            # print(f"sleep_time:{sleep_time}")
+            # logger_mp.debug(f"arm_velocity_limit:{self.arm_velocity_limit}")
+            # logger_mp.debug(f"sleep_time:{sleep_time}")
 
     def ctrl_dual_arm(self, q_target, tauff_target):
         '''Set control target values q & tau of the left and right arm motors.'''
@@ -721,16 +759,19 @@ class H1_2_ArmController:
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
-        print("[H1_2_ArmController] ctrl_dual_arm_go_home start...")
+        logger_mp.info("[H1_2_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(14)
             # self.tauff_target = np.zeros(14)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                print("[H1_2_ArmController] both arms have reached the home position.")
+                logger_mp.info("[H1_2_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -837,8 +878,10 @@ class H1_2_JointIndex(IntEnum):
     kNotUsedJoint7 = 34
 
 class H1_ArmController:
-    def __init__(self):
-        print("Initialize H1_ArmController...")
+    def __init__(self, simulation_mode = False):
+        self.simulation_mode = simulation_mode
+        
+        logger_mp.info("Initialize H1_ArmController...")
         self.q_target = np.zeros(8)
         self.tauff_target = np.zeros(8)
 
@@ -857,7 +900,7 @@ class H1_ArmController:
 
         # initialize lowcmd publisher and lowstate subscriber
         ChannelFactoryInitialize(0)
-        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand, go_LowCmd)
+        self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, go_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, go_LowState)
         self.lowstate_subscriber.Init()
@@ -870,7 +913,8 @@ class H1_ArmController:
 
         while not self.lowstate_buffer.GetData():
             time.sleep(0.01)
-            print("[H1_ArmController] Waiting to subscribe dds...")
+            logger_mp.warning("[H1_ArmController] Waiting to subscribe dds...")
+        logger_mp.info("[H1_ArmController] Subscribe dds ok.")
 
         # initialize h1's lowcmd msg
         self.crc = CRC()
@@ -881,9 +925,9 @@ class H1_ArmController:
         self.msg.gpio = 0
 
         self.all_motor_q = self.get_current_motor_q()
-        print(f"Current all body motor state q:\n{self.all_motor_q} \n")
-        print(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        print("Lock all joints except two arms...\n")
+        logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
+        logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
+        logger_mp.info("Lock all joints except two arms...\n")
 
         for id in H1_JointIndex:
             if self._Is_weak_motor(id):
@@ -895,7 +939,7 @@ class H1_ArmController:
                 self.msg.motor_cmd[id].kd = self.kd_high
                 self.msg.motor_cmd[id].mode = 0x0A
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        print("Lock OK!\n")
+        logger_mp.info("Lock OK!\n")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -903,7 +947,7 @@ class H1_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        print("Initialize H1_ArmController OK!\n")
+        logger_mp.info("Initialize H1_ArmController OK!\n")
 
     def _subscribe_motor_state(self):
         while True:
@@ -931,7 +975,10 @@ class H1_ArmController:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
 
-            cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
+            if self.simulation_mode:
+                cliped_arm_q_target = arm_q_target
+            else:
+                cliped_arm_q_target = self.clip_arm_q_target(arm_q_target, velocity_limit = self.arm_velocity_limit)
 
             for idx, id in enumerate(H1_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
@@ -949,8 +996,8 @@ class H1_ArmController:
             all_t_elapsed = current_time - start_time
             sleep_time = max(0, (self.control_dt - all_t_elapsed))
             time.sleep(sleep_time)
-            # print(f"arm_velocity_limit:{self.arm_velocity_limit}")
-            # print(f"sleep_time:{sleep_time}")
+            # logger_mp.debug(f"arm_velocity_limit:{self.arm_velocity_limit}")
+            # logger_mp.debug(f"sleep_time:{sleep_time}")
 
     def ctrl_dual_arm(self, q_target, tauff_target):
         '''Set control target values q & tau of the left and right arm motors.'''
@@ -972,16 +1019,19 @@ class H1_ArmController:
     
     def ctrl_dual_arm_go_home(self):
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
-        print("[H1_ArmController] ctrl_dual_arm_go_home start...")
+        logger_mp.info("[H1_ArmController] ctrl_dual_arm_go_home start...")
+        max_attempts = 100
+        current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(8)
             # self.tauff_target = np.zeros(8)
         tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
-        while True:
+        while current_attempts < max_attempts:
             current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
-                print("[H1_ArmController] both arms have reached the home position.")
+                logger_mp.info("[H1_ArmController] both arms have reached the home position.")
                 break
+            current_attempts += 1
             time.sleep(0.05)
 
     def speed_gradual_max(self, t = 5.0):
@@ -1054,7 +1104,7 @@ if __name__ == "__main__":
     import pinocchio as pin 
 
     arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
-    arm = G1_29_ArmController()
+    arm = G1_29_ArmController(simulation_mode=True)
     # arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = False)
     # arm = G1_23_ArmController()
     # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = False)

@@ -1,7 +1,9 @@
-from .dex_retargeting.retargeting_config import RetargetingConfig
+from dex_retargeting import RetargetingConfig
 from pathlib import Path
 import yaml
 from enum import Enum
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 
 class HandType(Enum):
     INSPIRE_HAND = "../assets/inspire_hand/inspire_hand.yml"
@@ -36,6 +38,8 @@ class HandRetargeting:
 
             self.left_retargeting_joint_names = self.left_retargeting.joint_names
             self.right_retargeting_joint_names = self.right_retargeting.joint_names
+            self.left_indices = self.left_retargeting.optimizer.target_link_human_indices
+            self.right_indices = self.right_retargeting.optimizer.target_link_human_indices
 
             if hand_type == HandType.UNITREE_DEX3 or hand_type == HandType.UNITREE_DEX3_Unit_Test:
                 # In section "Sort by message structure" of https://support.unitree.com/home/en/G1_developer/dexterous_hand
@@ -49,11 +53,11 @@ class HandRetargeting:
                 self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_dex3_api_joint_names]
 
                 # Archive: This is the joint order of the dex-retargeting library version 0.1.1.
-                # print([joint.get_name() for joint in self.left_retargeting.optimizer.robot.get_active_joints()])
+                # logger_mp.info([joint.get_name() for joint in self.left_retargeting.optimizer.robot.get_active_joints()])
                 # ['left_hand_thumb_0_joint', 'left_hand_thumb_1_joint', 'left_hand_thumb_2_joint', 
                 #  'left_hand_middle_0_joint', 'left_hand_middle_1_joint', 
                 #  'left_hand_index_0_joint', 'left_hand_index_1_joint']
-                # print([joint.get_name() for joint in self.right_retargeting.optimizer.robot.get_active_joints()])
+                # logger_mp.info([joint.get_name() for joint in self.right_retargeting.optimizer.robot.get_active_joints()])
                 # ['right_hand_thumb_0_joint', 'right_hand_thumb_1_joint', 'right_hand_thumb_2_joint',
                 #  'right_hand_middle_0_joint', 'right_hand_middle_1_joint', 
                 #  'right_hand_index_0_joint', 'right_hand_index_1_joint']
@@ -66,11 +70,11 @@ class HandRetargeting:
                 self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_inspire_api_joint_names]
         
         except FileNotFoundError:
-            print(f"Configuration file not found: {config_file_path}")
+            logger_mp.warning(f"Configuration file not found: {config_file_path}")
             raise
         except yaml.YAMLError as e:
-            print(f"YAML error while reading {config_file_path}: {e}")
+            logger_mp.warning(f"YAML error while reading {config_file_path}: {e}")
             raise
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger_mp.error(f"An error occurred: {e}")
             raise
