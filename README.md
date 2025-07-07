@@ -1,10 +1,13 @@
 <div align="center">
-  <h1 align="center"> avp_teleoperate </h1>
-  <h3 align="center"> Unitree Robotics </h3>
+  <h1 align="center">xr_teleoperate</h1>
+  <a href="https://www.unitree.com/" target="_blank">
+    <img src="https://www.unitree.com/images/0079f8938336436e955ea3a98c4e1e59.svg" alt="Unitree LOGO" width="15%">
+  </a>
   <p align="center">
     <a> English </a> | <a href="README_zh-CN.md">中文</a> | <a href="README_ja-JP.md">日本語</a>
   </p>
 </div>
+
 
 # 📺 Video Demo
 
@@ -26,219 +29,254 @@
     </tr>
   </table>
 </p>
+# 🔖 Release Note
 
+1. **Upgraded the Vuer library** to support more XR device modes. The project has been renamed from **`avp_teleoperate`** to **`xr_teleoperate`** to better reflect its broader scope — now supporting not only Apple Vision Pro but also Meta Quest 3 (with controllers) and PICO 4 Ultra Enterprise (with controllers).
 
+2. **Modularized** parts of the codebase and introduced Git submodules (`git submodule`) for better structure and maintainability.
+
+3. Added **headless**, **motion**, and **simulation** modes. The startup parameter configuration has been improved for ease of use (see Section 2.2). The **simulation** mode enables environment validation and hardware failure diagnostics.
+
+4. Changed the default hand retarget algorithm from Vector to **DexPilot**, improving the precision and intuitiveness of fingertip pinching.
+
+5. Various other improvements and refinements.
 
 
 
 # 0. 📖 Introduction
-This repository implements teleoperation of the **Unitree humanoid robot** using **XR Devices** ( such as Apple Vision Pro、 PICO 4 Ultra Enterprise or Meta Quest 3 ).
 
-Here are the currently supported robots,
-
-<table>
-  <tr>
-    <th style="text-align: center;"> &#129302; Robot </th>
-    <th style="text-align: center;"> &#9898; Status </th>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> <a href="https://www.unitree.com/g1" target="_blank"> G1 (29DoF) </td>
-    <td style="text-align: center;"> &#9989; Completed </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> <a href="https://www.unitree.com/g1" target="_blank"> G1 (23DoF) </td>
-    <td style="text-align: center;"> &#9989; Completed </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> <a href="https://www.unitree.com/h1" target="_blank"> H1 (Arm 4DoF) </td>
-    <td style="text-align: center;"> &#9989; Completed </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> <a href="https://www.unitree.com/h1" target="_blank"> H1_2 (Arm 7DoF) </td>
-    <td style="text-align: center;"> &#9989; Completed </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> <a href="https://www.unitree.com/Dex3-1" target="_blank"> Dex3-1 hand </td>
-    <td style="text-align: center;"> &#9989; Completed </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> <a href="https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand" target="_blank"> Inspire hand </td>
-    <td style="text-align: center;"> &#9989; Completed </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;"> ... </td>
-    <td style="text-align: center;"> ... </td>
-  </tr>
-</table>
-
-
+This repository implements **teleoperation** control of a **Unitree humanoid robot** using **XR (Extended Reality) devices ** (such as Apple Vision Pro, PICO 4 Ultra Enterprise, or Meta Quest 3). 
 
 Here are the required devices and wiring diagram,
 
 <p align="center">
-  <a href="https://oss-global-cdn.unitree.com/static/0ab3a06368464245b30f7f25161f44b8_2965x1395.png">
-    <img src="https://oss-global-cdn.unitree.com/static/0ab3a06368464245b30f7f25161f44b8_2965x1395.png" alt="Watch the Document" style="width: 100%;">
-  </a>
-</p>
-
-This is a network topology diagram, using the G1 robot as an example,
-
-<p align="center">
-  <a href="https://oss-global-cdn.unitree.com/static/9871e3bac4c54140b0839c68baf48a4a_1872x929.png">
-    <img src="https://oss-global-cdn.unitree.com/static/9871e3bac4c54140b0839c68baf48a4a_1872x929.png" alt="Watch the Document" style="width: 100%;">
+  <a href="https://oss-global-cdn.unitree.com/static/3f75e91e41694ed28c29bcad22954d1d_5990x4050.png">
+    <img src="https://oss-global-cdn.unitree.com/static/3f75e91e41694ed28c29bcad22954d1d_5990x4050.png" alt="System Diagram" style="width: 100%;">
   </a>
 </p>
 
 
+The currently supported devices in this repository:
+
+<table>
+  <tr>
+    <th align="center">🤖 Robot</th>
+    <th align="center">⚪ Status</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.unitree.com/cn/g1" target="_blank">G1 (29 DoF)</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.unitree.com/cn/g1" target="_blank">G1 (23 DoF)</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.unitree.com/cn/h1" target="_blank">H1 (4‑DoF arm)</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.unitree.com/cn/h1" target="_blank">H1_2 (7‑DoF arm)</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.unitree.com/cn/Dex1-1" target="_blank">Dex1‑1 gripper</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.unitree.com/cn/Dex3-1" target="_blank">Dex3‑1 dexterous hand</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand" target="_blank">Inspire dexterous hand</a></td>
+    <td align="center">✅ Complete</td>
+  </tr>
+  <tr>
+    <td align="center"> ··· </td>
+    <td align="center"> ··· </td>
+  </tr>
+</table>
 
 
+# 1. 📦 Installation
 
-# 1. 📦 Prerequisites
-
-We tested our code on Ubuntu 20.04 and Ubuntu 22.04, other operating systems may be configured differently.  
+We tested our code on Ubuntu 20.04 and Ubuntu 22.04, other operating systems may be configured differently. This document primarily describes the **default mode**.
 
 For more information, you can refer to [Official Documentation ](https://support.unitree.com/home/zh/Teleoperation) and [OpenTeleVision](https://github.com/OpenTeleVision/TeleVision).
 
-## 1.1 🦾  inverse kinematics 
+## 1.1 📥 basic
 
 ```bash
-unitree@Host:~$ conda create -n tv python=3.8
-unitree@Host:~$ conda activate tv
-# If you use `pip install`, Make sure pinocchio version is 3.1.0
-(tv) unitree@Host:~$ conda install pinocchio -c conda-forge
-(tv) unitree@Host:~$ pip install meshcat
-(tv) unitree@Host:~$ pip install casadi
+# Create a conda environment
+(base) unitree@Host:~$ conda create -n tv python=3.10 pinocchio=3.1.0 numpy=1.26.4 -c conda-forge
+(base) unitree@Host:~$ conda activate tv
+# Clone this repo
+(tv) unitree@Host:~$ git clone https://github.com/unitreerobotics/xr_teleoperate.git
+(tv) unitree@Host:~$ cd xr_teleoperate
+# Shallow clone submodule
+(tv) unitree@Host:~/xr_teleoperate$ git submodule update --init --depth 1
+# Install televuer submodule
+(tv) unitree@Host:~/xr_teleoperate$ cd teleop/televuer
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ pip install -e .
+# Generate the certificate files required for televuer submodule
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem
+# Install dex-retargeting submodule
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ cd ../robot_control/dex-retargeting/
+(tv) unitree@Host:~/xr_teleoperate/teleop/robot_control/dex-retargeting$ pip install -e .
+# Install additional dependencies required by this repo
+(tv) unitree@Host:~/xr_teleoperate/teleop/robot_control/dex-retargeting$ cd ../../../
+(tv) unitree@Host:~/xr_teleoperate$ pip install -r requirements.txt
 ```
-
-> p.s. All identifiers in front of the command are meant for prompting: **Which device and directory the command should be executed on**.
->
-In the Ubuntu system's `~/.bashrc` file, the default configuration is: `PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '`
->
-> Taking the command `(tv) unitree@Host:~$ pip install meshcat` as an example:
->
-> - `(tv)` Indicates the shell is in the conda environment named `tv`.
->- `unitree@Host:~` Shows the user `\u` `unitree` is logged into the device `\h` `Host`, with the current working directory `\w` as `$HOME`.
-> - `$` shows the current shell is Bash (for non-root users).
-> - `pip install meshcat` is the command `unitree` wants to execute on `Host`.
-> 
-> You can refer to [Harley Hahn's Guide to Unix and Linux](https://www.harley.com/unix-book/book/chapters/04.html#H)  and  [Conda User Guide](https://docs.conda.io/projects/conda/en/latest/user-guide/getting-started.html) to learn more.
 
 ## 1.2 🕹️ unitree_sdk2_python
 
 ```bash
-# Install unitree_sdk2_python.
+# Install unitree_sdk2_python library which handles communication with the robot
 (tv) unitree@Host:~$ git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
 (tv) unitree@Host:~$ cd unitree_sdk2_python
 (tv) unitree@Host:~$ pip install -e .
 ```
 
-> p.s. The [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) in the original h1_2 branch was a temporary version. It has now been fully migrated to the official Python-based control and communication library: [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python).
+> **Note 1**: The [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) in the original h1_2 branch was a temporary version. It has now been fully migrated to the official Python-based control and communication library: [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python).
+>
+> **Note 2**: All identifiers in front of the command are meant for prompting: **Which device and directory the command should be executed on**.
+>
+> In the Ubuntu system's `~/.bashrc` file, the default configuration is: `PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '`
+>
+> Taking the command `(tv) unitree@Host:~$ pip install meshcat` as an example:
+>
+> - `(tv)` Indicates the shell is in the conda environment named `tv`.
+> - `unitree@Host:~` Shows the user `\u` `unitree` is logged into the device `\h` `Host`, with the current working directory `\w` as `$HOME`.
+> - `$` shows the current shell is Bash (for non-root users).
+> - `pip install meshcat` is the command `unitree` wants to execute on `Host`.
+>
+> You can refer to [Harley Hahn's Guide to Unix and Linux](https://www.harley.com/unix-book/book/chapters/04.html#H)  and  [Conda User Guide](https://docs.conda.io/projects/conda/en/latest/user-guide/getting-started.html) to learn more.
 
+# 2. 💻 Simulation Deployment
 
+## 2.1 📥 Environment Setup
 
-# 2. ⚙️ Configuration
+First, install [unitree_sim_isaaclab](https://github.com/unitreerobotics/unitree_sim_isaaclab). Follow that repo’s README.
 
-## 2.1 📥 basic
+Then launch the simulation with a G1(29 DoF) and Dex3 hand configuration:
 
 ```bash
-(tv) unitree@Host:~$ cd ~
-(tv) unitree@Host:~$ git clone https://github.com/unitreerobotics/avp_teleoperate.git 
-(tv) unitree@Host:~$ cd ~/avp_teleoperate
-(tv) unitree@Host:~$ pip install -r requirements.txt
+(base) unitree@Host:~$ conda activate unitree_sim_env
+(unitree_sim_env) unitree@Host:~$ cd ~/unitree_sim_isaaclab
+(unitree_sim_env) unitree@Host:~/unitree_sim_isaaclab$ python sim_main.py --device cpu --enable_cameras --task Isaac-PickPlace-Cylinder-G129-Dex3-Joint --enable_dex3_dds --robot_type g129
 ```
 
-## 2.2 🔌 Local streaming
+After simulation starts, click once in the window to activate it. The terminal will show:  `controller started, start main loop...`
 
-**2.2.1 Apple Vision Pro** 
+Here is the simulation GUI:
 
-Apple does not allow WebXR on non-https connections. To test the application locally, we need to create a self-signed certificate and install it on the client. You need a ubuntu machine and a router. Connect the Apple Vision Pro and the ubuntu **Host machine** to the same router.
+<p align="center">   <a href="https://oss-global-cdn.unitree.com/static/bea51ef618d748368bf59c60f4969a65_1749x1090.png">     <img src="https://oss-global-cdn.unitree.com/static/bea51ef618d748368bf59c60f4969a65_1749x1090.png" alt="Simulation UI" style="width: 75%;">   </a> </p>
 
-1. install mkcert: https://github.com/FiloSottile/mkcert
-2. check **Host machine** local ip address:
+## 2.2 🚀 Launch
+
+This program supports XR control of a physical robot or in simulation. Choose modes with command-line arguments:
+
+- **Basic control parameters**
+
+| ⚙️ Parameter |                 📜 Description                 |                          🔘 Options                           | 📌 Default |
+| :---------: | :-------------------------------------------: | :----------------------------------------------------------: | :-------: |
+| `--xr-mode` |             Choose XR input mode              | `hand` (**hand tracking**)<br/>`controller` (**controller tracking**) |  `hand`   |
+|   `--arm`   | Choose robot arm type (see 0. 📖 Introduction) |           `G1_29`<br/>`G1_23`<br/>`H1_2`<br/>`H1`            |  `G1_29`  |
+|   `--ee`    |  Choose end-effector (see 0. 📖 Introduction)  |               `dex1`<br/>`dex3`<br/>`inspire1`               |   none    |
+
+- **Mode flags**
+
+|    ⚙️ Flag    |                        📜 Description                         |
+| :----------: | :----------------------------------------------------------: |
+|  `--record`  | **Enable data recording**: after pressing **r** to start, press **s** to start/stop saving an episode. Can repeat. |
+|  `--motion`  | **Enable motion control**: allows independent robot control during teleop. In hand mode, use the R3 remote for walking; in controller mode, use joystick for walking |
+| `--headless` |        Run without GUI (for headless PC2 deployment)         |
+|   `--sim`    |                  Enable **simulation mode**                  |
+
+Assuming hand tracking with G1(29 DoF) + Dex3 in simulation with recording:
 
 ```bash
-(tv) unitree@Host:~/avp_teleoperate$ ifconfig | grep inet
+(tv) unitree@Host:~$ cd ~/xr_teleoperate/teleop/
+(tv) unitree@Host:~/xr_teleoperate/teleop/$ python teleop_hand_and_arm.py --xr-mode=hand --arm=G1_29 --ee=dex3 --sim --record
+# Simplified (defaults apply):
+(tv) unitree@Host:~/xr_teleoperate/teleop/$ python teleop_hand_and_arm.py --ee=dex3 --sim --record
 ```
 
-Suppose the local ip address of the **Host machine** is `192.168.123.2`
+After the program starts, the terminal shows:
 
-> p.s. You can use `ifconfig` command to check your **Host machine** ip address.
+<p align="center">   <a href="https://oss-global-cdn.unitree.com/static/735464d237214f6c9edf8c7db9847a0a_1874x1275.png">     <img src="https://oss-global-cdn.unitree.com/static/735464d237214f6c9edf8c7db9847a0a_1874x1275.png" alt="Terminal Start Log" style="width: 75%;">   </a> </p>
 
-3. create certificate:
+Next steps:
 
-```bash
-(tv) unitree@Host:~/avp_teleoperate$ mkcert -install && mkcert -cert-file cert.pem -key-file key.pem 192.168.123.2 localhost 127.0.0.1
-```
+1. Wear your XR headset (e.g. Apple Vision Pro, PICO4, etc.)
 
-place the generated `cert.pem` and `key.pem` files in `teleop`
+2. Connect to the corresponding Wi‑Fi
 
-```bash
-(tv) unitree@Host:~/avp_teleoperate$ cp cert.pem key.pem ~/avp_teleoperate/teleop/
-```
+3. Open a browser (e.g. Safari or PICO Browser) and go to:  `https://192.168.123.2:8012?ws=wss://192.168.123.2:8012`
 
-4. open firewall on server:
+   > **Note 1**: This IP must match your **Host** IP (check with `ifconfig`).
+   > **Note 2**: You may see a warning page. Click **Advanced**, then **Proceed to IP (unsafe)**.
 
-```bash
-(tv) unitree@Host:~/avp_teleoperate$ sudo ufw allow 8012
-```
+   <p align="center">
+     <a href="https://oss-global-cdn.unitree.com/static/cef18751ca6643b683bfbea35fed8e7c_1279x1002.png">
+       <img src="https://oss-global-cdn.unitree.com/static/cef18751ca6643b683bfbea35fed8e7c_1279x1002.png" alt="vuer_unsafe" style="width: 50%;">
+     </a>
+   </p>
 
-5. install ca-certificates on Apple Vision Pro:
+4. In the Vuer web, click **Virtual Reality**. Allow all prompts to start the VR session.
 
-```bash
-(tv) unitree@Host:~/avp_teleoperate$ mkcert -CAROOT
-```
+   <p align="center">  <a href="https://oss-global-cdn.unitree.com/static/fdeee4e5197f416290d8fa9ecc0b28e6_2480x1286.png">    <img src="https://oss-global-cdn.unitree.com/static/fdeee4e5197f416290d8fa9ecc0b28e6_2480x1286.png" alt="Vuer UI" style="width: 75%;">  </a> </p>
 
-Copy the `rootCA.pem` via AirDrop to Apple Vision Pro and install it.
+5. You’ll see the robot’s first-person view in the headset. The terminal prints connection info:
 
-Settings > General > About > Certificate Trust Settings. Under "Enable full trust for root certificates", turn on trust for the certificate.
+   ```bash
+   websocket is connected. id:dbb8537d-a58c-4c57-b49d-cbb91bd25b90
+   default socket worker is up, adding clientEvents
+   Uplink task running. id:dbb8537d-a58c-4c57-b49d-cbb91bd25b90
+   ```
 
-> In the new version of Vision OS 2, this step is different: After copying the certificate to the Apple Vision Pro device via AirDrop, a certificate-related information section will appear below the account bar in the top left corner of the Settings app. Tap it to enable trust for the certificate.
+6. Align your arm to the **robot’s initial pose** to avoid sudden movements at start:
 
-Settings > Apps > Safari > Advanced > Feature Flags > Enable WebXR Related Features.
+   <p align="center">  <a href="https://oss-global-cdn.unitree.com/static/2522a83214744e7c8c425cc2679a84ec_670x867.png">    <img src="https://oss-global-cdn.unitree.com/static/2522a83214744e7c8c425cc2679a84ec_670x867.png" alt="Initial Pose" style="width: 25%;">  </a> </p>
 
-------
+7. Press **r** in the terminal to begin teleoperation. You can now control the robot arm and dexterous hand.
 
-**2.2.2 PICO 4 Ultra Enterprise or Meta Quest 3**
+8. During teleoperation, press **s** to start recording; press **s** again to stop and save. Repeatable process.
 
-We have tried using hand tracking for teleoperation on the PICO 4 Ultra Enterprise and Meta-Quest 3.
+<p align="center">  <a href="https://oss-global-cdn.unitree.com/static/f5b9b03df89e45ed8601b9a91adab37a_2397x1107.png">    <img src="https://oss-global-cdn.unitree.com/static/f5b9b03df89e45ed8601b9a91adab37a_2397x1107.png" alt="Recording Process" style="width: 75%;">  </a> </p>
 
-The system specifications of PICO 4 Ultra Enterprise:
+> **Note 1**: Recorded data is stored in `xr_teleoperate/teleop/utils/data` by default, with usage instructions at this repo:  [unitree_IL_lerobot](https://github.com/unitreerobotics/unitree_IL_lerobot/tree/main?tab=readme-ov-file#data-collection-and-conversion).
+> **Note 2**: Please pay attention to your disk space size during data recording.
 
-> System Version: 5.12.6.U; Android version number: 14; Software version number: c000_cf01_bv1.0.1_sv5.12.6_202412121344_sparrow_b4244_user; browser version: [4.0.28 beta version](https://github.com/vuer-ai/vuer/issues/45#issuecomment-2674918619)
+## 2.3 🔚 Exit
 
-The system specifications of Meta-Quest 3:
-
-> System version: 49829370066100510; Version: 62.0.0.273.343.570372087; Runtime version: 62.0.0.269.341.570372063; OS version: SQ3A.220605.009.A1.
-
-For more configuration steps, please refer to the [issue](https://github.com/unitreerobotics/avp_teleoperate/issues/32).
-
-## 2.3 🔎 Unit Test
-
-This step is to verify that the environment is installed correctly.
-
-comming soon.
+Press **q** in the terminal (or “record image” window) to quit.
 
 
 
-# 3. 🚀 Usage
+# 3. 🤖 Physical Deployment
 
-Please read the  [Official Documentation ](https://support.unitree.com/home/zh/Teleoperation) at least once before starting this program.
+Physical deployment steps are similar to simulation, with these key differences:
 
+## 3.1 🖼️ Image Service
 
-## 3.1 🖼️ Image Server
+In the simulation environment, the image service is automatically enabled. For physical deployment, you need to manually start the image service based on your specific camera hardware. The steps are as follows:
 
-Copy `image_server.py` in the `avp_teleoperate/teleop/image_server` directory to the **Development Computing Unit PC2** of Unitree Robot (G1/H1/H1_2/etc.), and execute the following command **in the PC2**:
+Copy `image_server.py` in the `xr_teleoperate/teleop/image_server` directory to the **Development Computing Unit PC2** of Unitree Robot (G1/H1/H1_2/etc.), 
 
 ```bash
-# p.s.1 You can transfer image_server.py to PC2 via the scp command and then use ssh to remotely login to PC2 to execute it.
+# p.s. You can transfer image_server.py to PC2 via the scp command and then use ssh to remotely login to PC2 to execute it.
 # Assuming the IP address of the development computing unit PC2 is 192.168.123.164, the transmission process is as follows:
 # log in to PC2 via SSH and create the folder for the image server
 (tv) unitree@Host:~$ ssh unitree@192.168.123.164 "mkdir -p ~/image_server"
 # Copy the local image_server.py to the ~/image_server directory on PC2
-(tv) unitree@Host:~$ scp ~/avp_teleoperate/teleop/image_server/image_server.py unitree@192.168.123.164:~/image_server/
+(tv) unitree@Host:~$ scp ~/xr_teleoperate/teleop/image_server/image_server.py unitree@192.168.123.164:~/image_server/
+```
 
+and execute the following command **in the PC2**:
 
-# p.s.2 Currently, this image transmission program supports two methods for reading images: OpenCV and Realsense SDK. Please refer to the comments in the `ImageServer` class within `image_server.py` to configure your image transmission service according to your camera hardware.
+```bash
+# p.s. Currently, this image transmission program supports two methods for reading images: OpenCV and Realsense SDK. Please refer to the comments in the `ImageServer` class within `image_server.py` to configure your image transmission service according to your camera hardware.
 # Now located in Unitree Robot PC2 terminal
 unitree@PC2:~/image_server$ python image_server.py
 # You can see the terminal output as follows:
@@ -250,12 +288,14 @@ unitree@PC2:~/image_server$ python image_server.py
 After image service is started, you can use `image_client.py` **in the Host** terminal to test whether the communication is successful:
 
 ```bash
-(tv) unitree@Host:~/avp_teleoperate/teleop/image_server$ python image_client.py
+(tv) unitree@Host:~/xr_teleoperate/teleop/image_server$ python image_client.py
 ```
 
-## 3.2 ✋ Inspire hands Server (optional)
+## 3.2 ✋ Inspire Hand Service (optional)
 
-> Note: If the selected robot configuration does not use the Inspire dexterous hand (Gen1), please ignore this section.
+> **Note 1**: Skip this if your config does not use the Inspire hand.
+> **Note 2**: For the G1 robot with [Inspire DFX hand](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand), see [issue #46](https://github.com/unitreerobotics/xr_teleoperate/issues/46).
+> **Note 3**: For [Inspire FTP hand]((https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)), see  [issue #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48).
 
 You can refer to [Dexterous Hand Development](https://support.unitree.com/home/zh/H1_developer/Dexterous_hand) to configure related environments and compile control programs. First, use [this URL](https://oss-global-cdn.unitree.com/static/0a8335f7498548d28412c31ea047d4be.zip) to download the dexterous hand control interface program. Copy it to **PC2** of  Unitree robots. 
 
@@ -275,143 +315,99 @@ unitree@PC2:~/h1_inspire_service/build$ ./h1_hand_example
 
 If two hands open and close continuously, it indicates success. Once successful, close the `./h1_hand_example` program in Terminal 2.
 
-## 3.3 🚀 Start
+## 3.3 🚀 Launch
 
 > ![Warning](https://img.shields.io/badge/Warning-Important-red) 
 >
 > 1. Everyone must keep a safe distance from the robot to prevent any potential danger!
->
 > 2. Please make sure to read the [Official Documentation](https://support.unitree.com/home/zh/Teleoperation) at least once before running this program.
->
-> 3. Always make sure that the robot has entered [debug mode (L2+R2)](https://support.unitree.com/home/zh/H1_developer/Remote_control) to stop the motion control program, this will avoid potential command conflict problems.
->
+> 3. Without `--motion`, always make sure that the robot has entered [debug mode (L2+R2)](https://support.unitree.com/home/zh/H1_developer/Remote_control) to stop the motion control program, this will avoid potential command conflict problems.
+> 4. To use motion mode (with `--motion`), ensure the robot is in control mode (via [R3 remote](https://www.unitree.com/R3)).
+> 5. In motion mode:
+>    - Right controller **A** = Exit teleop
+>    - Both joysticks pressed = soft emergency stop (switch to damping mode)
+>    - Left joystick = drive directions; 
+>    - right joystick = turning; 
+>    - max speed is limited in the code.
 
-It's best to have two operators to run this program, referred to as **Operator A** and **Operator B**.
-
-
-
-First, **Operator B** needs to perform the following steps:
-
-1. Modify the `img_config` image client configuration under the `if __name__ == '__main__':` section in `~/avp_teleoperate/teleop/teleop_hand_and_arm.py`. It should match the image server parameters you configured on PC2 in Section 3.1.
-
-2. Choose different launch parameters based on your robot configuration. Here are some example commands:
-
-   ```bash
-   # 1. G1 (29DoF) Robot + Dex3-1 Dexterous Hand (Note: G1_29 is the default value for --arm, so it can be omitted)
-   (tv) unitree@Host:~/avp_teleoperate/teleop$ python teleop_hand_and_arm.py --arm=G1_29 --hand=dex3
-   
-   # 2. G1 (29DoF) Robot only
-   (tv) unitree@Host:~/avp_teleoperate/teleop$ python teleop_hand_and_arm.py
-
-   # 3. G1 (23DoF) Robot
-   (tv) unitree@Host:~/avp_teleoperate/teleop$ python teleop_hand_and_arm.py --arm=G1_23
-   
-   # 4. H1_2 Robot + Inspire hand
-   (tv) unitree@Host:~/avp_teleoperate/teleop$ python teleop_hand_and_arm.py --arm=H1_2 --hand=inspire1
-
-   # 5. H1 Robot
-   (tv) unitree@Host:~/avp_teleoperate/teleop$ python teleop_hand_and_arm.py --arm=H1
-   
-   # 6. If you want to enable data visualization + recording, you can add the --record option
-   (tv) unitree@Host:~/avp_teleoperate/teleop$ python teleop_hand_and_arm.py --arm=G1_23 --record
-   ```
-
-3. If the program starts successfully, the terminal will pause at the final line displaying the message: "Please enter the start signal (enter 'r' to start the subsequent program):"
-
-
-
-And then, **Operator A** needs to perform the following steps:
-
-1. Wear your Apple Vision Pro device.
-
-2. Open Safari on Apple Vision Pro and visit : https://192.168.123.2:8012?ws=wss://192.168.123.2:8012
-
-   > p.s. This IP address should match the IP address of your **Host machine**.
-
-3. Click `Enter VR` and `Allow` to start the VR session.
-
-4. You will see the robot's first-person perspective in the Apple Vision Pro.
-
-
-
-Next, **Operator B** can start teleoperation program by pressing the **r** key in the terminal.
-
-At this time, **Operator A** can remotely control the robot's arms (and dexterous hands).
-
-If the `--record` parameter is used, **Operator B** can press **s** key in the opened "record image" window to start recording data, and press **s** again to stop. This operation can be repeated as needed for multiple recordings.
-
-> p.s.1 Recorded data is stored in `avp_teleoperate/teleop/utils/data` by default, with usage instructions at this repo:  [unitree_IL_lerobot](https://github.com/unitreerobotics/unitree_IL_lerobot/tree/main?tab=readme-ov-file#data-collection-and-conversion).
->
-> p.s.2 Please pay attention to your disk space size during data recording.
+Same as simulation but follow the safety warnings above.
 
 ## 3.4 🔚 Exit
 
-To exit the program, **Operator B** can press the **q** key in the 'record image'  window.  
-
->  ![Warning](https://img.shields.io/badge/Warning-Important-red) 
+> ![Warning](https://img.shields.io/badge/Warning-Important-red)
+> To avoid damaging the robot, it is recommended to position the robot's arms close to the initial pose before pressing **q** to exit.
 >
-> To avoid damaging the robot, it's best to ensure that **Operator A** positions the robot's arms in a naturally lowered or appropriate position before **Operator B** presses **q** to exit.
+> - In **Debug Mode**: After pressing the exit key, both arms will return to the robot's **initial pose** within 5 seconds, and then the control will end.
+>
+> - In **Motion Mode**: After pressing the exit key, both arms will return to the robot's **motion control pose** within 5 seconds, and then the control will end.
+
+Same as simulation but follow the safety warnings above.
 
 
 
-# 4. 🗺️ Codebase Tutorial
+# 4. 🗺️ Codebase Overview
 
 ```
-avp_teleoperate/
+xr_teleoperate/
 │
 ├── assets                    [Storage of robot URDF-related files]
 │
+├── hardware                  [3D‑printed hardware modules]
+│
 ├── teleop
 │   ├── image_server
-│   │     ├── image_client.py [Used to receive image data from the robot image server]
-│   │     ├── image_server.py [Capture images from cameras and send via network (Running on robot's on-board computer)]
+│   │     ├── image_client.py      [Used to receive image data from the robot image server]
+│   │     ├── image_server.py      [Capture images from cameras and send via network (Running on robot's Development Computing Unit PC2)]
 │   │
-│   ├── open_television
-│   │      ├── television.py    [Using Vuer to capture wrist and hand data from apple vision pro]  
-│   │      ├── tv_wrapper.py    [Post-processing of captured data]
+│   ├── televuer
+│   │      ├── src/televuer
+│   │         ├── television.py       [captures XR devices's head, wrist, hand/controller data]
+│   │         ├── tv_wrapper.py       [Post-processing of captured data]
+│   │      ├── test
+│   │         ├── _test_television.py [test for television.py]
+│   │         ├── _test_tv_wrapper.py [test for tv_wrapper.py]
 │   │
 │   ├── robot_control
-│   │      ├── robot_arm_ik.py        [Inverse kinematics of the arm]  
-│   │      ├── robot_arm.py           [Control dual arm joints and lock the others]
+│   │      ├── src/dex-retargeting [Dexterous hand retargeting algorithm library]
+│   │      ├── robot_arm_ik.py     [Inverse kinematics of the arm]
+│   │      ├── robot_arm.py        [Control dual arm joints and lock the others]
+│   │      ├── hand_retargeting.py [Dexterous hand retargeting algorithm library Wrapper]
 │   │      ├── robot_hand_inspire.py  [Control inspire hand joints]
 │   │      ├── robot_hand_unitree.py  [Control unitree hand joints]
 │   │
 │   ├── utils
-│   │      ├── episode_writer.py          [Used to record data for imitation learning]  
-│   │      ├── mat_tool.py                [Some small math tools]
+│   │      ├── episode_writer.py          [Used to record data for imitation learning]
 │   │      ├── weighted_moving_filter.py  [For filtering joint data]
 │   │      ├── rerun_visualizer.py        [For visualizing data during recording]
 │   │
-│   │──teleop_hand_and_arm.py   [Startup execution code for teleoperation]
+│   └── teleop_hand_and_arm.py    [Startup execution code for teleoperation]
 ```
-
-
 
 # 5. 🛠️ Hardware
 
-## 5.1 📋 List
+## 5.1 📋 Parts List
 
-|             Item             | Quantity |                             Link                             |                           Remarks                           |
-| :--------------------------: | :------: | :----------------------------------------------------------: | :---------------------------------------------------------: |
-|     **Unitree Robot G1**     |    1     |                  https://www.unitree.com/g1                  |               With development computing unit               |
-|     **Apple Vision Pro**     |    1     |           https://www.apple.com/apple-vision-pro/            |                                                             |
-|          **Router**          |    1     |                                                              |                                                             |
-|         **User PC**          |    1     |                                                              | Recommended graphics card performance at RTX 4080 and above |
-|    **Head Stereo Camera**    |    1     | [For reference only] http://e.tb.cn/h.TaZxgkpfWkNCakg?tk=KKz03Kyu04u |                          For head                           |
-|    **Head Camera Mount**     |    1     | https://github.com/unitreerobotics/avp_teleoperate/blob/g1/hardware/head_stereo_camera_mount.STEP |          For mounting head stereo camera, FOV 130°          |
-|     Intel RealSense D405     |    2     |      https://www.intelrealsense.com/depth-camera-d405/       |                          For wrist                          |
-|       Wrist Ring Mount       |    2     | https://github.com/unitreerobotics/avp_teleoperate/blob/g1/hardware/wrist_ring_mount.STEP |                Used with wrist camera mount                 |
-|   Left Wrist Camera Mount    |    1     | https://github.com/unitreerobotics/avp_teleoperate/blob/g1/hardware/left_wrist_D405_camera_mount.STEP |       For mounting left wrist RealSense D405  camera        |
-|   Right Wrist Camera Mount   |    1     | https://github.com/unitreerobotics/avp_teleoperate/blob/g1/hardware/right_wrist_D405_camera_mount.STEP |       For mounting right wrist RealSense D405  camera       |
-|         M3 hex nuts          |    4     |         [For reference only] https://a.co/d/1opqtOr          |                     For Wrist fastener                      |
-|         M3x12 screws         |    4     |       [For reference only] https://amzn.asia/d/aU9NHSf       |                     For wrist fastener                      |
-|         M3x6 screws          |    4     |       [For reference only] https://amzn.asia/d/0nEz5dJ       |                     For wrist fastener                      |
-|       **M4x14 screws**       |    2     |       [For reference only] https://amzn.asia/d/cfta55x       |                      For head fastener                      |
-| **M2x4 self-tapping screws** |    4     |       [For reference only] https://amzn.asia/d/1msRa5B       |                      For head fastener                      |
+|             Item             | Quantity |                           Link(s)                            |                           Remarks                            |
+| :--------------------------: | :------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+|      **humanoid robot**      |    1     |                   https://www.unitree.com                    |               With development computing unit                |
+|        **XR device**         |    1     | https://www.apple.com/apple-vision-pro/<br/>https://www.meta.com/quest/quest-3<br/>https://www.picoxr.com/products/pico4-ultra-enterprise |                                                              |
+|          **Router**          |    1     |                                                              |  Required for **default mode**; **wireless mode** not need.  |
+|         **User PC**          |    1     |                                                              | In **simulation mode**, please use the [officially recommended](https://docs.isaacsim.omniverse.nvidia.com/4.5.0/installation/requirements.html) hardware resources for deployment. |
+|    **Head stereo camera**    |    1     | [For reference only] http://e.tb.cn/h.TaZxgkpfWkNCakg?tk=KKz03Kyu04u |                     For robot head view                      |
+|    **Head camera mount**     |    1     | https://github.com/unitreerobotics/xr_teleoperate/blob/g1/hardware/head_stereo_camera_mount.STEP |               For mounting head stereo camera                |
+| Intel RealSense D405 camera  |    2     |      https://www.intelrealsense.com/depth-camera-d405/       |                          For wrist                           |
+|       Wrist ring mount       |    2     | https://github.com/unitreerobotics/xr_teleoperate/blob/g1/hardware/wrist_ring_mount.STEP |                 Used with wrist camera mount                 |
+|    Left wrist D405 mount     |    1     | https://github.com/unitreerobotics/xr_teleoperate/blob/g1/hardware/left_wrist_D405_camera_mount.STEP |        For mounting left wrist RealSense D405  camera        |
+|    Right wrist D405 mount    |    1     | https://github.com/unitreerobotics/xr_teleoperate/blob/g1/hardware/right_wrist_D405_camera_mount.STEP |       For mounting right wrist RealSense D405  camera        |
+|        M3-1 hex nuts         |    4     |         [For reference only] https://a.co/d/1opqtOr          |                      For Wrist fastener                      |
+|         M3x12 screws         |    4     |       [For reference only] https://amzn.asia/d/aU9NHSf       |                      For Wrist fastener                      |
+|         M3x6 screws          |    4     |       [For reference only] https://amzn.asia/d/0nEz5dJ       |                      For Wrist fastener                      |
+|       **M4x14 screws**       |    2     |       [For reference only] https://amzn.asia/d/cfta55x       |                      For head fastener                       |
+| **M2x4 self‑tapping screws** |    4     |       [For reference only] https://amzn.asia/d/1msRa5B       |                      For head fastener                       |
 
 > Note: The bolded items are essential equipment for teleoperation tasks, while the other items are optional equipment for recording [datasets](https://huggingface.co/unitreerobotics).
 
-## 5.2 🔨 Installation diagram
+## 5.2 🔨 Mounting Diagrams
 
 <table>
     <tr>
@@ -471,15 +467,12 @@ avp_teleoperate/
 
 This code builds upon following open-source code-bases. Please visit the URLs to see the respective LICENSES:
 
-1) https://github.com/OpenTeleVision/TeleVision
-2) https://github.com/dexsuite/dex-retargeting
-3) https://github.com/vuer-ai/vuer
-4) https://github.com/stack-of-tasks/pinocchio
-5) https://github.com/casadi/casadi
-6) https://github.com/meshcat-dev/meshcat-python
-7) https://github.com/zeromq/pyzmq
-8) https://github.com/unitreerobotics/unitree_dds_wrapper
-9) https://github.com/tonyzhaozh/act
-10) https://github.com/facebookresearch/detr
-11) https://github.com/Dingry/BunnyVisionPro
-12) https://github.com/unitreerobotics/unitree_sdk2_python
+1. https://github.com/OpenTeleVision/TeleVision
+2. https://github.com/dexsuite/dex-retargeting
+3. https://github.com/vuer-ai/vuer
+4. https://github.com/stack-of-tasks/pinocchio
+5. https://github.com/casadi/casadi
+6. https://github.com/meshcat-dev/meshcat-python
+7. https://github.com/zeromq/pyzmq
+8. https://github.com/Dingry/BunnyVisionPro
+9. https://github.com/unitreerobotics/unitree_sdk2_python

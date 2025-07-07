@@ -23,10 +23,7 @@ This code builds upon following open-source code-bases. Please visit the URLs to
 5) https://github.com/casadi/casadi
 6) https://github.com/meshcat-dev/meshcat-python
 7) https://github.com/zeromq/pyzmq
-8) https://github.com/unitreerobotics/unitree_dds_wrapper
-9) https://github.com/tonyzhaozh/act
-10) https://github.com/facebookresearch/detr
-11) https://github.com/Dingry/BunnyVisionPro
-12) https://github.com/unitreerobotics/unitree_sdk2_python
+8) https://github.com/Dingry/BunnyVisionPro
+9) https://github.com/unitreerobotics/unitree_sdk2_python
 
 ------------------

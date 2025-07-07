@@ -1,4 +1,4 @@
-from .dex_retargeting.retargeting_config import RetargetingConfig
+from dex_retargeting import RetargetingConfig
 from pathlib import Path
 import yaml
 from enum import Enum

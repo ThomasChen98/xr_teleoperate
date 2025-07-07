@@ -1,1 +1,0 @@
-/home/unitree/Code/unitree-opject/unitree_sim_isaaclab/data

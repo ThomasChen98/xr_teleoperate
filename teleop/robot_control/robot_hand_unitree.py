@@ -396,7 +396,7 @@ class Gripper_JointIndex(IntEnum):
 
 if __name__ == "__main__":
     import argparse
-    from teleop.open_television.tv_wrapper import TeleVisionWrapper
+    from televuer import TeleVuerWrapper
     from teleop.image_server.image_client import ImageClient
 
     parser = argparse.ArgumentParser()
@@ -432,7 +432,7 @@ if __name__ == "__main__":
     image_receive_thread.start()
 
     # television and arm
-    tv_wrapper = TeleVisionWrapper(BINOCULAR, tv_img_shape, img_shm.name)
+    tv_wrapper = TeleVuerWrapper(BINOCULAR, tv_img_shape, img_shm.name)
 
     if args.dex:
         left_hand_array = Array('d', 75, lock=True)

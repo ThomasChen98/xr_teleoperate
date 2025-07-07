@@ -14,7 +14,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from teleop.open_television import TeleVisionWrapper
+from televuer import TeleVuerWrapper
 from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Gripper_Controller
@@ -129,8 +129,8 @@ if __name__ == '__main__':
     image_receive_thread.start()
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVisionWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == 'hand', img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
-                                   return_state_data=True, return_hand_rot_data = False)
+    tv_wrapper = TeleVuerWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == 'hand', img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
+                                 return_state_data=True, return_hand_rot_data = False)
 
     # arm
     if args.arm == 'G1_29':
@@ -411,6 +411,8 @@ if __name__ == '__main__':
             wrist_img_shm.close()
         if args.record:
             recorder.close()
+        if args.sim:
+            sim_state_subscriber.stop_subscribe()
         listen_keyboard_thread.join()
         logger_mp.info("Finally, exiting program...")
         exit(0)
