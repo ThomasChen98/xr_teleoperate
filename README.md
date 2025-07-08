@@ -189,8 +189,8 @@ This program supports XR control of a physical robot or in simulation. Choose mo
 
 |    ⚙️ Flag    |                        📜 Description                         |
 | :----------: | :----------------------------------------------------------: |
-|  `--record`  | **Enable data recording**: after pressing **r** to start, press **s** to start/stop saving an episode. Can repeat. |
-|  `--motion`  | **Enable motion control**: allows independent robot control during teleop. In hand mode, use the R3 remote for walking; in controller mode, use joystick for walking |
+|  `--record`  | Enable **data recording**<br />After pressing **r** to start, press **s** to start/stop saving an episode. Can repeat. |
+|  `--motion`  | Enable **motion mode**<br />After enabling this mode, the teleoperation program can run alongside the robot's motion control.<br />In **hand tracking** mode, you can use the [R3 Controller](https://www.unitree.com/cn/R3) to control the robot's walking behavior; <br />in **controller tracking** mode, you can also use [controllers to control the robot’s movement](https://github.com/unitreerobotics/xr_teleoperate/blob/375cdc27605de377c698e2b89cad0e5885724ca6/teleop/teleop_hand_and_arm.py#L247-L257). |
 | `--headless` |        Run without GUI (for headless PC2 deployment)         |
 |   `--sim`    |                  Enable **simulation mode**                  |
 
@@ -318,7 +318,7 @@ If two hands open and close continuously, it indicates success. Once successful,
 
 ## 3.3 🚀 Launch
 
-> ![Warning](https://img.shields.io/badge/Warning-Important-red) 
+>  ![Warning](https://img.shields.io/badge/Warning-Important-red)
 >
 > 1. Everyone must keep a safe distance from the robot to prevent any potential danger!
 > 2. Please make sure to read the [Official Documentation](https://support.unitree.com/home/zh/Teleoperation) at least once before running this program.
@@ -336,6 +336,7 @@ Same as simulation but follow the safety warnings above.
 ## 3.4 🔚 Exit
 
 > ![Warning](https://img.shields.io/badge/Warning-Important-red)
+>
 > To avoid damaging the robot, it is recommended to position the robot's arms close to the initial pose before pressing **q** to exit.
 >
 > - In **Debug Mode**: After pressing the exit key, both arms will return to the robot's **initial pose** within 5 seconds, and then the control will end.

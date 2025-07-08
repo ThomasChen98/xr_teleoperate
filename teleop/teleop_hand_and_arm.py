@@ -404,15 +404,15 @@ if __name__ == '__main__':
         logger_mp.info("KeyboardInterrupt, exiting program...")
     finally:
         arm_ctrl.ctrl_dual_arm_go_home()
-        tv_img_shm.unlink()
-        tv_img_shm.close()
-        if WRIST:
-            wrist_img_shm.unlink()
-            wrist_img_shm.close()
-        if args.record:
-            recorder.close()
         if args.sim:
             sim_state_subscriber.stop_subscribe()
+        tv_img_shm.close()
+        tv_img_shm.unlink()
+        if WRIST:
+            wrist_img_shm.close()
+            wrist_img_shm.unlink()
+        if args.record:
+            recorder.close()
         listen_keyboard_thread.join()
         logger_mp.info("Finally, exiting program...")
         exit(0)

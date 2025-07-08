@@ -20,7 +20,7 @@ logger_mp = logging_mp.get_logger(__name__)
 class SharedMemoryManager:
     """Shared memory manager"""
     
-    def __init__(self, name: str = None, size: int = 512):
+    def __init__(self, name: Optional[str] = None, size: int = 512):
         """Initialize shared memory manager
         
         Args:
@@ -118,7 +118,6 @@ class SharedMemoryManager:
         """Destructor"""
         self.cleanup()
 
-
 class SimStateSubscriber:
     """Simple sim state subscriber class"""
     
@@ -139,80 +138,69 @@ class SimStateSubscriber:
         # initialize shared memory
         self._setup_shared_memory()
         
-        logger_mp.info(f"[SimStateSubscriber] Initialized with shared memory: {shm_name}")
+        logger_mp.debug(f"[SimStateSubscriber] Initialized with shared memory: {shm_name}")
     
     def _setup_shared_memory(self):
         """Setup shared memory"""
         try:
             self.shared_memory = SharedMemoryManager(self.shm_name, self.shm_size)
-            logger_mp.info(f"[SimStateSubscriber] Shared memory setup successfully")
+            logger_mp.debug(f"[SimStateSubscriber] Shared memory setup successfully")
         except Exception as e:
             logger_mp.error(f"[SimStateSubscriber] Failed to setup shared memory: {e}")
-    
-    def _message_handler(self, msg: String_):
-        """Handle received messages"""
-        try:
-            # parse the received message
-            data = json.loads(msg.data)
-            
-            # write to shared memory
-            if self.shared_memory:
-                self.shared_memory.write_data(data)
-                
-        except Exception as e:
-            logger_mp.error(f"[SimStateSubscriber] Error processing message: {e}")
-    
-    def _subscribe_loop(self):
-        """Subscribe loop thread"""
-        logger_mp.info(f"[SimStateSubscriber] Subscribe thread started")
-        
-        while self.running:
-            try:
-                time.sleep(0.001)  # keep thread alive
-            except Exception as e:
-                logger_mp.error(f"[SimStateSubscriber] Error in subscribe loop: {e}")
-                time.sleep(0.01)
-        
-        logger_mp.info(f"[SimStateSubscriber] Subscribe thread stopped")
     
     def start_subscribe(self):
         """Start subscribing"""
         if self.running:
-            logger_mp.info(f"[SimStateSubscriber] Already running")
+            logger_mp.warning(f"[SimStateSubscriber] Already running")
             return
         
         try:
-            # setup subscriber
             self.subscriber = ChannelSubscriber("rt/sim_state", String_)
-            self.subscriber.Init(self._message_handler, 10)
-            
+            self.subscriber.Init()
             self.running = True
-            logger_mp.info(f"[SimStateSubscriber] Subscriber initialized")
-            # start subscribe thread
-            self.subscribe_thread = threading.Thread(target=self._subscribe_loop)
-            self.subscribe_thread.daemon = True
+
+            self.subscribe_thread = threading.Thread(target=self._subscribe_sim_state, daemon=True)
             self.subscribe_thread.start()
-            
-            logger_mp.info(f"[SimStateSubscriber] Started subscribing to rt/sim_state_cmd")
+
+            logger_mp.info(f"[SimStateSubscriber] Started subscribing to rt/sim_state")
             
         except Exception as e:
             logger_mp.error(f"[SimStateSubscriber] Failed to start subscribing: {e}")
             self.running = False
-    
+
+    def _subscribe_sim_state(self):
+        """Subscribe loop thread"""
+        logger_mp.debug(f"[SimStateSubscriber] Subscribe thread started")
+        
+        while self.running:
+            try:
+                if self.subscriber:
+                    msg = self.subscriber.Read()
+                    if msg:
+                        data = json.loads(msg.data)
+                    else:
+                        logger_mp.warning("[SimStateSubscriber] Received None message")
+                    if self.shared_memory and data:
+                        self.shared_memory.write_data(data)
+                else:
+                    logger_mp.error("[SimStateSubscriber] Subscriber is not initialized")
+                time.sleep(0.002)
+            except Exception as e:
+                logger_mp.error(f"[SimStateSubscriber] Error in subscribe loop: {e}")
+                time.sleep(0.01)
+
     def stop_subscribe(self):
         """Stop subscribing"""
         if not self.running:
+            logger_mp.warning(f"[SimStateSubscriber] Already stopped or not running")
             return
 
-        logger_mp.info(f"[SimStateSubscriber] Stopping subscriber...")
         self.running = False
-        
         # wait for thread to finish
         if self.subscribe_thread:
             self.subscribe_thread.join(timeout=1.0)
 
         if self.shared_memory:
-            # cleanup shared memory
             self.shared_memory.cleanup()
         logger_mp.info(f"[SimStateSubscriber] Subscriber stopped")
     
@@ -239,20 +227,6 @@ class SimStateSubscriber:
         self.stop_subscribe()
 
 
-# convenient functions
-def create_sim_state_subscriber(shm_name: str = "sim_state_cmd_data", shm_size: int = 3096) -> SimStateSubscriber:
-    """Create a sim state subscriber instance
-    
-    Args:
-        shm_name: shared memory name
-        shm_size: shared memory size
-        
-    Returns:
-        SimStateSubscriber: subscriber instance
-    """
-    return SimStateSubscriber(shm_name, shm_size)
-
-
 def start_sim_state_subscribe(shm_name: str = "sim_state_cmd_data", shm_size: int = 3096) -> SimStateSubscriber:
     """Start sim state subscribing
     
@@ -263,7 +237,7 @@ def start_sim_state_subscribe(shm_name: str = "sim_state_cmd_data", shm_size: in
     Returns:
         SimStateSubscriber: started subscriber instance
     """
-    subscriber = create_sim_state_subscriber(shm_name, shm_size)
+    subscriber = SimStateSubscriber(shm_name, shm_size)
     subscriber.start_subscribe()
     return subscriber
 
