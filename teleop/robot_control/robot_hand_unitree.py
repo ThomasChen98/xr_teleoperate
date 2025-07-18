@@ -232,7 +232,7 @@ Gripper_Num_Motors = 2
 kTopicGripperCommand = "rt/unitree_actuator/cmd"
 kTopicGripperState = "rt/unitree_actuator/state"
 
-class Gripper_Controller:
+class Dex1_1_Gripper_Controller:
     def __init__(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_data_lock = None, dual_gripper_state_out = None, dual_gripper_action_out = None, 
                        filter = True, fps = 200.0, Unit_Test = False, simulation_mode = False):
         """
@@ -253,7 +253,7 @@ class Gripper_Controller:
         Unit_Test: Whether to enable unit testing
         """
 
-        logger_mp.info("Initialize Gripper_Controller...")
+        logger_mp.info("Initialize Dex1_1_Gripper_Controller...")
 
         self.fps = fps
         self.Unit_Test = Unit_Test
@@ -287,15 +287,15 @@ class Gripper_Controller:
             if any(state != 0.0 for state in self.dual_gripper_state):
                 break
             time.sleep(0.01)
-            logger_mp.warning("[Gripper_Controller] Waiting to subscribe dds...")
-        logger_mp.info("[Gripper_Controller] Subscribe dds ok.")
+            logger_mp.warning("[Dex1_1_Gripper_Controller] Waiting to subscribe dds...")
+        logger_mp.info("[Dex1_1_Gripper_Controller] Subscribe dds ok.")
 
         self.gripper_control_thread = threading.Thread(target=self.control_thread, args=(left_gripper_value_in, right_gripper_value_in, self.dual_gripper_state,
                                                                                          dual_gripper_data_lock, dual_gripper_state_out, dual_gripper_action_out))
         self.gripper_control_thread.daemon = True
         self.gripper_control_thread.start()
 
-        logger_mp.info("Initialize Gripper_Controller OK!\n")
+        logger_mp.info("Initialize Dex1_1_Gripper_Controller OK!\n")
 
     def _subscribe_gripper_state(self):
         while True:
@@ -394,7 +394,7 @@ class Gripper_Controller:
                 sleep_time = max(0, (1 / self.fps) - time_elapsed)
                 time.sleep(sleep_time)
         finally:
-            logger_mp.info("Gripper_Controller has been closed.")
+            logger_mp.info("Dex1_1_Gripper_Controller has been closed.")
 
 class Gripper_JointIndex(IntEnum):
     kLeftGripper = 0
@@ -454,7 +454,7 @@ if __name__ == "__main__":
         dual_gripper_data_lock = Lock()
         dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
         dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
-        gripper_ctrl = Gripper_Controller(left_hand_array, right_hand_array, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, Unit_Test = True)
+        gripper_ctrl = Dex1_1_Gripper_Controller(left_hand_array, right_hand_array, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, Unit_Test = True)
 
 
     user_input = input("Please enter the start signal (enter 's' to start the subsequent program):\n")
