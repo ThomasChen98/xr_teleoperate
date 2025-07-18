@@ -10,6 +10,8 @@ class HandType(Enum):
     INSPIRE_HAND_Unit_Test = "../../assets/inspire_hand/inspire_hand.yml"
     UNITREE_DEX3 = "../assets/unitree_hand/unitree_dex3.yml"
     UNITREE_DEX3_Unit_Test = "../../assets/unitree_hand/unitree_dex3.yml"
+    BRAINCO_HAND = "../assets/brainco_hand/brainco.yml"
+    BRAINCO_HAND_Unit_Test = "../../assets/brainco_hand/brainco.yml"
 
 class HandRetargeting:
     def __init__(self, hand_type: HandType):
@@ -20,6 +22,10 @@ class HandRetargeting:
         elif hand_type == HandType.INSPIRE_HAND:
             RetargetingConfig.set_default_urdf_dir('../assets')
         elif hand_type == HandType.INSPIRE_HAND_Unit_Test:
+            RetargetingConfig.set_default_urdf_dir('../../assets')
+        elif hand_type == HandType.BRAINCO_HAND:
+            RetargetingConfig.set_default_urdf_dir('../assets')
+        elif hand_type == HandType.BRAINCO_HAND_Unit_Test:
             RetargetingConfig.set_default_urdf_dir('../../assets')
 
         config_file_path = Path(hand_type.value)
@@ -52,22 +58,23 @@ class HandRetargeting:
                 self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_dex3_api_joint_names]
                 self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_dex3_api_joint_names]
 
-                # Archive: This is the joint order of the dex-retargeting library version 0.1.1.
-                # logger_mp.info([joint.get_name() for joint in self.left_retargeting.optimizer.robot.get_active_joints()])
-                # ['left_hand_thumb_0_joint', 'left_hand_thumb_1_joint', 'left_hand_thumb_2_joint', 
-                #  'left_hand_middle_0_joint', 'left_hand_middle_1_joint', 
-                #  'left_hand_index_0_joint', 'left_hand_index_1_joint']
-                # logger_mp.info([joint.get_name() for joint in self.right_retargeting.optimizer.robot.get_active_joints()])
-                # ['right_hand_thumb_0_joint', 'right_hand_thumb_1_joint', 'right_hand_thumb_2_joint',
-                #  'right_hand_middle_0_joint', 'right_hand_middle_1_joint', 
-                #  'right_hand_index_0_joint', 'right_hand_index_1_joint']
             elif hand_type == HandType.INSPIRE_HAND or hand_type == HandType.INSPIRE_HAND_Unit_Test:
+                # "Joint Motor Sequence" of https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand
                 self.left_inspire_api_joint_names  = [ 'L_pinky_proximal_joint', 'L_ring_proximal_joint', 'L_middle_proximal_joint',
                                                        'L_index_proximal_joint', 'L_thumb_proximal_pitch_joint', 'L_thumb_proximal_yaw_joint' ]
                 self.right_inspire_api_joint_names = [ 'R_pinky_proximal_joint', 'R_ring_proximal_joint', 'R_middle_proximal_joint',
                                                        'R_index_proximal_joint', 'R_thumb_proximal_pitch_joint', 'R_thumb_proximal_yaw_joint' ]
                 self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_inspire_api_joint_names]
                 self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_inspire_api_joint_names]
+            
+            elif hand_type == HandType.BRAINCO_HAND or hand_type == HandType.BRAINCO_HAND_Unit_Test:
+                # "Driver Motor ID" of https://www.brainco-hz.com/docs/revolimb-hand/product/parameters.html
+                self.left_brainco_api_joint_names  = [ 'left_thumb_metacarpal_joint', 'left_thumb_proximal_joint', 'left_index_proximal_joint',
+                                                       'left_middle_proximal_joint', 'left_ring_proximal_joint', 'left_pinky_proximal_joint' ]
+                self.right_brainco_api_joint_names = [ 'right_thumb_metacarpal_joint', 'right_thumb_proximal_joint', 'right_index_proximal_joint',
+                                                       'right_middle_proximal_joint', 'right_ring_proximal_joint', 'right_pinky_proximal_joint' ]
+                self.left_dex_retargeting_to_hardware = [ self.left_retargeting_joint_names.index(name) for name in self.left_brainco_api_joint_names]
+                self.right_dex_retargeting_to_hardware = [ self.right_retargeting_joint_names.index(name) for name in self.right_brainco_api_joint_names]
         
         except FileNotFoundError:
             logger_mp.warning(f"Configuration file not found: {config_file_path}")

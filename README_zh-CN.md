@@ -29,14 +29,35 @@
     </tr>
   </table>
 </p>
+# 🔖 版本说明
 
-# 🔖 发布说明
+## 🏷️ v1.1
 
-1. 升级 [Vuer](https://github.com/vuer-ai/vuer) 库，扩展了设备支持模式。为更准确反映功能范围，项目由 **avp_teleoperate** 更名为 **xr_teleoperate**，从最初仅支持 Apple Vision Pro，扩展至兼容 Meta Quest 3（含手柄） 与 PICO 4 Ultra Enterprise（含手柄） 等多款 XR 设备。
+1. 末端执行器类型新增'brainco'，这是[强脑科技第二代灵巧手](https://www.brainco-hz.com/docs/revolimb-hand/)
+2. 为避免与实机部署时发生冲突，将仿真模式下的 dds 通道的domain id修改为1
+3. 修复默认频率过高的问题
+
+## 🏷️ v1.0 (newvuer)
+
+1. 升级 [Vuer](https://github.com/vuer-ai/vuer) 库至 v0.0.60 版本，XR设备支持模式扩展为**手部跟踪**和**控制器跟踪**两种。为更准确反映功能范围，项目由 **avp_teleoperate** 更名为 **xr_teleoperate**。
+
+   测试设备包括： Apple Vision Pro，Meta Quest 3（含手柄） 与 PICO 4 Ultra Enterprise（含手柄）。
+
 2. 对部分功能进行了**模块化**拆分，并通过 Git 子模块（git submodule）方式进行管理和加载，提升代码结构的清晰度与维护性。
+
 3. 新增**无头**、**运控**及**仿真**模式，优化启动参数配置（详见第2.2节），提升使用便捷性。**仿真**模式的加入，方便了环境验证和硬件故障排查。
+
 4. 将默认手部映射算法从 Vector 切换为 **DexPilot**，优化了指尖捏合的精度与交互体验。
+
 5. 其他一些优化
+
+## 🏷️ v0.5 (oldvuer)
+
+1. 该版本曾经命名为 `avp_teleoperate`
+2. 支持 'G1_29', 'G1_23', 'H1_2', 'H1' 机器人类型
+3. 支持 'dex3', 'gripper', 'inspire1' 末端执行器类型
+4. 仅支持 XR 设备的手部跟踪模式（ [Vuer](https://github.com/vuer-ai/vuer) 版本为 v0.0.32RC7），不支持控制器模式
+5. 支持数据录制模式
 
 
 
@@ -88,10 +109,15 @@
     <td style="text-align: center;"> &#9989; 完成 </td>
   </tr>
   <tr>
+    <td style="text-align: center;"> <a href="https://www.brainco-hz.com/docs/revolimb-hand/" target="_blank"> 强脑灵巧手 </td>
+    <td style="text-align: center;"> &#9989; 完成 </td>
+  </tr>
+  <tr>
     <td style="text-align: center;"> ··· </td>
     <td style="text-align: center;"> ··· </td>
   </tr>
 </table>
+
 
 
 # 1. 📦 安装
@@ -133,9 +159,11 @@
 (tv) unitree@Host:~/unitree_sdk2_python$ pip install -e .
 ```
 
-> 注意1：原 h1_2 分支中的 [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) 为临时版本，现已全面转换到上述正式的 Python 版控制通信库：[unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python)
+> 注意1：在 `xr_teleoperate >= v1.1` 版本中，`unitree_sdk2_python` 仓库的 commit **必须是等于或高于** [404fe44d76f705c002c97e773276f2a8fefb57e4](https://github.com/unitreerobotics/unitree_sdk2_python/commit/404fe44d76f705c002c97e773276f2a8fefb57e4) 版本
 
-> 注意2：命令前面的所有标识符是为了提示：该命令应该在哪个设备和目录下执行。
+> 注意2：原 h1_2 分支中的 [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) 为临时版本，现已全面转换到上述正式的 Python 版控制通信库：[unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python)
+
+> 注意3：命令前面的所有标识符是为了提示：该命令应该在哪个设备和目录下执行。
 >
 > p.s. 在 Ubuntu 系统 `~/.bashrc` 文件中，默认配置: `PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '`
 >
@@ -191,7 +219,7 @@
 | :---------: | :----------------------------------------------: | :------------------------------------------------------: | :------: |
 | `--xr-mode` |    选择 XR 输入模式（通过什么方式控制机器人）    | `hand`（**手势跟踪**）<br />`controller`（**手柄跟踪**） |  `hand`  |
 |   `--arm`   |      选择机器人设备类型（可参考 0. 📖 介绍）      |        `G1_29`<br />`G1_23`<br />`H1_2`<br />`H1`        | `G1_29`  |
-|   `--ee`    | 选择手臂的末端执行器设备类型（可参考 0. 📖 介绍） |            `dex1`<br />`dex3`<br />`inspire1`            | 无默认值 |
+|   `--ee`    | 选择手臂的末端执行器设备类型（可参考 0. 📖 介绍） |    `dex1`<br />`dex3`<br />`inspire1`<br />`brainco`     | 无默认值 |
 
 - 模式开关参数
 
@@ -352,7 +380,20 @@ unitree@PC2:~/h1_inspire_service/build$ ./h1_hand_example
 
 如果两只手连续打开和关闭，则表示成功。一旦成功，即可关闭终端 2 中的 `./h1_hand_example` 程序。
 
-## 3.3 🚀 启动遥操
+## 3.3 ✋BrainCo 手部服务（可选）
+
+请参考[官方文档](https://support.unitree.com/home/zh/G1_developer/brainco_hand)。安装完毕后，请手动启动两个灵巧手的服务，命令示例如下（串口名称可能与实际有所差别）：
+
+```bash
+# Terminal 1.
+sudo ./brainco_hand --id 126 --serial /dev/ttyUSB1
+# Terminal 2.
+sudo ./brainco_hand --id 127 --serial /dev/ttyUSB2
+```
+
+
+
+## 3.4 🚀 启动遥操
 
 >  ![Warning](https://img.shields.io/badge/Warning-Important-red)
 >
@@ -368,7 +409,7 @@ unitree@PC2:~/h1_inspire_service/build$ ./h1_hand_example
 
 与仿真部署基本一致，但要注意上述警告事项。
 
-## 3.4 🔚 退出
+## 3.5 🔚 退出
 
 >  ![Warning](https://img.shields.io/badge/Warning-Important-red)
 >

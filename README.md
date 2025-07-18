@@ -29,18 +29,37 @@
     </tr>
   </table>
 </p>
-
 # 🔖 Release Note
 
-1. **Upgraded the Vuer library** to support more XR device modes. The project has been renamed from **`avp_teleoperate`** to **`xr_teleoperate`** to better reflect its broader scope — now supporting not only Apple Vision Pro but also Meta Quest 3 (with controllers) and PICO 4 Ultra Enterprise (with controllers).
+## 🏷️ v1.1
 
-2. **Modularized** parts of the codebase and introduced Git submodules (`git submodule`) for better structure and maintainability.
+1. Added support for a new end-effector type: **`brainco`**, which refers to the [Brain Hand](https://www.brainco-hz.com/docs/revolimb-hand/) developed by [BrainCo](https://www.brainco.cn/#/product/dexterous).
+2. Changed the **DDS domain ID** to `1` in **simulation mode** to prevent conflicts during physical deployment.
+3. Fixed an issue where the default frequency was set too high.
 
-3. Added **headless**, **motion**, and **simulation** modes. The startup parameter configuration has been improved for ease of use (see Section 2.2). The **simulation** mode enables environment validation and hardware failure diagnostics.
+## 🏷️ v1.0 (newvuer)
 
-4. Changed the default hand retarget algorithm from Vector to **DexPilot**, improving the precision and intuitiveness of fingertip pinching.
+1. Upgraded the [Vuer](https://github.com/vuer-ai/vuer) library to version **v0.0.60**, expanding XR device support to two modes: **hand tracking** and **controller tracking**. The project has been renamed from **`avp_teleoperate`** to **`xr_teleoperate`** to better reflect its broader capabilities.
 
-5. Various other improvements and refinements.
+   Devices tested include: Apple Vision Pro, Meta Quest 3 (with controllers), and PICO 4 Ultra Enterprise (with controllers).
+
+2. Modularized parts of the codebase and integrated **Git submodules** (`git submodule`) to improve code clarity and maintainability.
+
+3. Introduced **headless**, **motion control**, and **simulation** modes. Startup parameter configuration has been streamlined for ease of use (see Section 2.2).
+   The **simulation** mode enables environment validation and hardware failure diagnostics.
+
+4. Changed the default hand retargeting algorithm from *Vector* to **DexPilot**, enhancing the precision and intuitiveness of fingertip pinching interactions.
+
+5. Various other improvements and optimizations.
+
+## 🏷️ v0.5 (oldvuer)
+
+1. The repository was named **`avp_teleoperate`** in this version.
+2. Supported robot included: `G1_29`, `G1_23`, `H1_2`, and `H1`.
+3. Supported end-effectors included: `dex3`, `dex1(gripper)`, and `inspire1`.
+4. Only supported **hand tracking mode** for XR devices (using [Vuer](https://github.com/vuer-ai/vuer) version **v0.0.32RC7**).
+   **Controller tracking mode** was **not** supported. 
+5. Data recording mode was available.
 
 
 
@@ -93,10 +112,15 @@ The currently supported devices in this repository:
     <td align="center">✅ Complete</td>
   </tr>
   <tr>
+    <td style="text-align: center;"> <a href="https://www.brainco-hz.com/docs/revolimb-hand/" target="_blank"> BrainCo dexterous hand </td>
+    <td style="text-align: center;"> &#9989; Complete </td>
+  </tr>
+  <tr>
     <td align="center"> ··· </td>
     <td align="center"> ··· </td>
   </tr>
 </table>
+
 
 
 # 1. 📦 Installation
@@ -138,9 +162,11 @@ For more information, you can refer to [Official Documentation ](https://support
 (tv) unitree@Host:~/unitree_sdk2_python$ pip install -e .
 ```
 
-> **Note 1**: The [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) in the original h1_2 branch was a temporary version. It has now been fully migrated to the official Python-based control and communication library: [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python).
+> **Note 1:** For `xr_teleoperate` versions **v1.1 and above**, please ensure that the `unitree_sdk2_python` repository is checked out to a commit **equal to or newer than** [404fe44d76f705c002c97e773276f2a8fefb57e4](https://github.com/unitreerobotics/unitree_sdk2_python/commit/404fe44d76f705c002c97e773276f2a8fefb57e4).
 >
-> **Note 2**: All identifiers in front of the command are meant for prompting: **Which device and directory the command should be executed on**.
+> **Note 2**: The [unitree_dds_wrapper](https://github.com/unitreerobotics/unitree_dds_wrapper) in the original h1_2 branch was a temporary version. It has now been fully migrated to the official Python-based control and communication library: [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python).
+>
+> **Note 3**: All identifiers in front of the command are meant for prompting: **Which device and directory the command should be executed on**.
 >
 > In the Ubuntu system's `~/.bashrc` file, the default configuration is: `PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '`
 >
@@ -183,7 +209,7 @@ This program supports XR control of a physical robot or in simulation. Choose mo
 | :---------: | :-------------------------------------------: | :----------------------------------------------------------: | :-------: |
 | `--xr-mode` |             Choose XR input mode              | `hand` (**hand tracking**)<br/>`controller` (**controller tracking**) |  `hand`   |
 |   `--arm`   | Choose robot arm type (see 0. 📖 Introduction) |           `G1_29`<br/>`G1_23`<br/>`H1_2`<br/>`H1`            |  `G1_29`  |
-|   `--ee`    |  Choose end-effector (see 0. 📖 Introduction)  |               `dex1`<br/>`dex3`<br/>`inspire1`               |   none    |
+|   `--ee`    |  Choose end-effector (see 0. 📖 Introduction)  |       `dex1`<br/>`dex3`<br/>`inspire1`<br />`brainco`        |   none    |
 
 - **Mode flags**
 
@@ -316,7 +342,22 @@ unitree@PC2:~/h1_inspire_service/build$ ./h1_hand_example
 
 If two hands open and close continuously, it indicates success. Once successful, close the `./h1_hand_example` program in Terminal 2.
 
-## 3.3 🚀 Launch
+## 3.3 ✋ BrainCo Hand Service (Optional)
+
+Please refer to the [official documentation](https://support.unitree.com/home/en/G1_developer/brainco_hand) for setup instructions.
+
+After installation, you need to manually start the services for both dexterous hands. Example commands are shown below (note: the serial port names may vary depending on your system):
+
+```bash
+# Terminal 1.
+sudo ./brainco_hand --id 126 --serial /dev/ttyUSB1
+# Terminal 2.
+sudo ./brainco_hand --id 127 --serial /dev/ttyUSB2
+```
+
+
+
+## 3.4 🚀 Launch
 
 >  ![Warning](https://img.shields.io/badge/Warning-Important-red)
 >
@@ -333,7 +374,7 @@ If two hands open and close continuously, it indicates success. Once successful,
 
 Same as simulation but follow the safety warnings above.
 
-## 3.4 🔚 Exit
+## 3.5 🔚 Exit
 
 > ![Warning](https://img.shields.io/badge/Warning-Important-red)
 >

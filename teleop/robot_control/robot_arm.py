@@ -81,7 +81,11 @@ class G1_29_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
+            ChannelFactoryInitialize(0)
+
         if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
         else:
@@ -97,7 +101,7 @@ class G1_29_ArmController:
         self.subscribe_thread.start()
 
         while not self.lowstate_buffer.GetData():
-            time.sleep(0.01)
+            time.sleep(0.1)
             logger_mp.warning("[G1_29_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[G1_29_ArmController] Subscribe dds ok.")
 
@@ -364,7 +368,10 @@ class G1_23_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
+            ChannelFactoryInitialize(0)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
@@ -377,7 +384,7 @@ class G1_23_ArmController:
         self.subscribe_thread.start()
 
         while not self.lowstate_buffer.GetData():
-            time.sleep(0.01)
+            time.sleep(0.1)
             logger_mp.warning("[G1_23_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[G1_23_ArmController] Subscribe dds ok.")
 
@@ -629,7 +636,10 @@ class H1_2_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
+            ChannelFactoryInitialize(0)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
@@ -642,7 +652,7 @@ class H1_2_ArmController:
         self.subscribe_thread.start()
 
         while not self.lowstate_buffer.GetData():
-            time.sleep(0.01)
+            time.sleep(0.1)
             logger_mp.warning("[H1_2_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[H1_2_ArmController] Subscribe dds ok.")
 
@@ -899,7 +909,10 @@ class H1_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        ChannelFactoryInitialize(0)
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
+            ChannelFactoryInitialize(0)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, go_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, go_LowState)
@@ -912,7 +925,7 @@ class H1_ArmController:
         self.subscribe_thread.start()
 
         while not self.lowstate_buffer.GetData():
-            time.sleep(0.01)
+            time.sleep(0.1)
             logger_mp.warning("[H1_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[H1_ArmController] Subscribe dds ok.")
 

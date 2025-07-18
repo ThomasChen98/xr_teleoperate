@@ -33,7 +33,7 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 class Dex3_1_Controller:
     def __init__(self, left_hand_array_in, right_hand_array_in, dual_hand_data_lock = None, dual_hand_state_array_out = None,
-                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False):
+                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False, simulation_mode = False):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
@@ -55,10 +55,15 @@ class Dex3_1_Controller:
 
         self.fps = fps
         self.Unit_Test = Unit_Test
+        self.simulation_mode = simulation_mode
         if not self.Unit_Test:
             self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3)
         else:
             self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test)
+
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
             ChannelFactoryInitialize(0)
 
         # initialize handcmd publisher and handstate subscriber
@@ -259,7 +264,9 @@ class Gripper_Controller:
         else:
             self.smooth_filter = None
 
-        if self.Unit_Test:
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
             ChannelFactoryInitialize(0)
  
         # initialize handcmd publisher and handstate subscriber
