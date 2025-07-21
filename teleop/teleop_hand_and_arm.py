@@ -292,18 +292,18 @@ if __name__ == '__main__':
                         current_body_action = []
                 elif args.ee == "dex1" and args.xr_mode == "hand":
                     with dual_gripper_data_lock:
-                        left_ee_state = [dual_gripper_state_array[1]]
-                        right_ee_state = [dual_gripper_state_array[0]]
-                        left_hand_action = [dual_gripper_action_array[1]]
-                        right_hand_action = [dual_gripper_action_array[0]]
+                        left_ee_state = [dual_gripper_state_array[0]]
+                        right_ee_state = [dual_gripper_state_array[1]]
+                        left_hand_action = [dual_gripper_action_array[0]]
+                        right_hand_action = [dual_gripper_action_array[1]]
                         current_body_state = []
                         current_body_action = []
                 elif args.ee == "dex1" and args.xr_mode == "controller":
                     with dual_gripper_data_lock:
-                        left_ee_state = [dual_gripper_state_array[1]]
-                        right_ee_state = [dual_gripper_state_array[0]]
-                        left_hand_action = [dual_gripper_action_array[1]]
-                        right_hand_action = [dual_gripper_action_array[0]]
+                        left_ee_state = [dual_gripper_state_array[0]]
+                        right_ee_state = [dual_gripper_state_array[1]]
+                        left_hand_action = [dual_gripper_action_array[0]]
+                        right_hand_action = [dual_gripper_action_array[1]]
                         current_body_state = arm_ctrl.get_current_motor_q().tolist()
                         current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
                                                 -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,

@@ -33,6 +33,10 @@
 
 # 🔖 版本说明
 
+## 🏷️ v1.2
+
+1. 升级Dex1_1夹爪控制代码，匹配 [dex1_1 service](https://github.com/unitreerobotics/dex1_1_service) 驱动
+
 ## 🏷️ v1.1
 
 1. 末端执行器类型新增'brainco'，这是[强脑科技第二代灵巧手](https://www.brainco-hz.com/docs/revolimb-hand/)

@@ -33,6 +33,10 @@
 
 # 🔖 Release Note
 
+## 🏷️ v1.2
+
+1. Upgrade the Dex1_1 gripper control code to be compatible with the [dex1_1 service](https://github.com/unitreerobotics/dex1_1_service) driver.
+
 ## 🏷️ v1.1
 
 1. Added support for a new end-effector type: **`brainco`**, which refers to the [Brain Hand](https://www.brainco-hz.com/docs/revolimb-hand/) developed by [BrainCo](https://www.brainco.cn/#/product/dexterous).
@@ -244,6 +248,7 @@ Next steps:
 3. Open a browser (e.g. Safari or PICO Browser) and go to:  `https://192.168.123.2:8012?ws=wss://192.168.123.2:8012`
 
    > **Note 1**: This IP must match your **Host** IP (check with `ifconfig`).
+   >
    > **Note 2**: You may see a warning page. Click **Advanced**, then **Proceed to IP (unsafe)**.
 
    <p align="center">
@@ -275,6 +280,7 @@ Next steps:
 <p align="center">  <a href="https://oss-global-cdn.unitree.com/static/f5b9b03df89e45ed8601b9a91adab37a_2397x1107.png">    <img src="https://oss-global-cdn.unitree.com/static/f5b9b03df89e45ed8601b9a91adab37a_2397x1107.png" alt="Recording Process" style="width: 75%;">  </a> </p>
 
 > **Note 1**: Recorded data is stored in `xr_teleoperate/teleop/utils/data` by default, with usage instructions at this repo:  [unitree_IL_lerobot](https://github.com/unitreerobotics/unitree_IL_lerobot/tree/main?tab=readme-ov-file#data-collection-and-conversion).
+>
 > **Note 2**: Please pay attention to your disk space size during data recording.
 
 ## 2.3 🔚 Exit
@@ -323,7 +329,9 @@ After image service is started, you can use `image_client.py` **in the Host** te
 ## 3.2 ✋ Inspire Hand Service (optional)
 
 > **Note 1**: Skip this if your config does not use the Inspire hand.
+>
 > **Note 2**: For the G1 robot with [Inspire DFX hand](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand), see [issue #46](https://github.com/unitreerobotics/xr_teleoperate/issues/46).
+>
 > **Note 3**: For [Inspire FTP hand]((https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)), see  [issue #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48).
 
 You can refer to [Dexterous Hand Development](https://support.unitree.com/home/zh/H1_developer/Dexterous_hand) to configure related environments and compile control programs. First, use [this URL](https://oss-global-cdn.unitree.com/static/0a8335f7498548d28412c31ea047d4be.zip) to download the dexterous hand control interface program. Copy it to **PC2** of  Unitree robots. 
