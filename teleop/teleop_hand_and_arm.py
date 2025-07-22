@@ -213,7 +213,6 @@ if __name__ == '__main__':
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
-                    stop_listening()
                     running = False
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
@@ -260,13 +259,14 @@ if __name__ == '__main__':
                 # quit teleoperate
                 if tele_data.tele_state.right_aButton:
                     running = False
+                    stop_listening()
                 # command robot to enter damping mode. soft emergency stop function
                 if tele_data.tele_state.left_thumbstick_state and tele_data.tele_state.right_thumbstick_state:
                     sport_client.Damp()
                 # control, limit velocity to within 0.3
                 sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                    -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                    -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
+                                  -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                  -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
 
             # get current robot state data.
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
@@ -306,8 +306,8 @@ if __name__ == '__main__':
                         right_hand_action = [dual_gripper_action_array[1]]
                         current_body_state = arm_ctrl.get_current_motor_q().tolist()
                         current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                                -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                                -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
+                                               -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
+                                               -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
                 elif (args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
                     with dual_hand_data_lock:
                         left_ee_state = dual_hand_state_array[:6]
