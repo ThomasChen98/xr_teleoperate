@@ -201,7 +201,11 @@
 (unitree_sim_env) unitree@Host:~/unitree_sim_isaaclab$ python sim_main.py --device cpu  --enable_cameras  --task  Isaac-PickPlace-Cylinder-G129-Dex3-Joint --enable_dex3_dds --robot_type g129
 ```
 
-仿真环境启动后，使用鼠标左键在窗口内点击一次以激活仿真运行状态。此时，终端内输出 `controller started, start main loop...`。
+💥💥💥 请注意❗
+
+> **仿真环境启动后，使用鼠标左键在窗口内点击一次以激活仿真运行状态。**
+>
+> 此时，终端内输出 `controller started, start main loop...`。
 
 仿真界面如下图所示：
 

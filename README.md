@@ -199,7 +199,11 @@ Then launch the simulation with a G1(29 DoF) and Dex3 hand configuration:
 (unitree_sim_env) unitree@Host:~/unitree_sim_isaaclab$ python sim_main.py --device cpu --enable_cameras --task Isaac-PickPlace-Cylinder-G129-Dex3-Joint --enable_dex3_dds --robot_type g129
 ```
 
-After simulation starts, click once in the window to activate it. The terminal will show:  `controller started, start main loop...`
+💥💥💥 NOTICE❗
+
+> **After simulation starts, click once in the window to activate it.**
+>
+> The terminal will show:  `controller started, start main loop...`
 
 Here is the simulation GUI:
 
