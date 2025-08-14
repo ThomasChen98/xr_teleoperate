@@ -68,9 +68,9 @@ class Inspire_Controller:
             hand_msg  = self.HandState_subscriber.Read()
             if hand_msg is not None:
                 for idx, id in enumerate(Inspire_Left_Hand_JointIndex):
-                    self.right_hand_state_array[idx] = hand_msg.states[id].q
-                for idx, id in enumerate(Inspire_Right_Hand_JointIndex):
                     self.left_hand_state_array[idx] = hand_msg.states[id].q
+                for idx, id in enumerate(Inspire_Right_Hand_JointIndex):
+                    self.right_hand_state_array[idx] = hand_msg.states[id].q
             time.sleep(0.002)
 
     def ctrl_dual_hand(self, left_q_target, right_q_target):
