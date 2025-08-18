@@ -368,27 +368,31 @@ unitree@PC2:~/image_server$ python image_server.py
 
 > 注意1：如果选择的机器人配置中没有使用 Inspire 系列灵巧手，那么请忽略本节内容。
 >
-> 注意2：如果选择的G1机器人配置，且使用 [Inspire DFX 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand)，那么请参考 [issue #46](https://github.com/unitreerobotics/xr_teleoperate/issues/46)。
+> 注意2：如果选择的G1机器人配置，且使用 [Inspire DFX 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand)，相关issue [#46](https://github.com/unitreerobotics/xr_teleoperate/issues/46)。
 >
-> 注意3：如果选择的机器人配置中使用了 [Inspire FTP 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)，那么请参考 [issue #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48)。
+> 注意3：如果选择的机器人配置中使用了 [Inspire FTP 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)，相关issue [ #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48)。
 
-您可以参考 [H1-DFX灵巧手开发](https://support.unitree.com/home/zh/H1_developer/Dexterous_hand) 配置相关环境并编译控制程序。首先，使用 [此链接](https://oss-global-cdn.unitree.com/static/0a8335f7498548d28412c31ea047d4be.zip) 下载灵巧手控制接口程序，然后将其复制到宇树机器人的**PC2**。
+首先，使用 [此链接: DFX_inspire_service](https://github.com/unitreerobotics/DFX_inspire_service) 克隆灵巧手控制接口程序，然后将其复制到宇树机器人的**PC2**。
 
 在宇树机器人的 **PC2** 上，执行命令：
 
 ```bash
 unitree@PC2:~$ sudo apt install libboost-all-dev libspdlog-dev
 # 构建项目
-unitree@PC2:~$ cd h1_inspire_service & mkdir build & cd build
-unitree@PC2:~/h1_inspire_service/build$ cmake .. -DCMAKE_BUILD_TYPE=Release
-unitree@PC2:~/h1_inspire_service/build$ make
-# 终端 1. 运行 h1 inspire 手部服务
-unitree@PC2:~/h1_inspire_service/build$ sudo ./inspire_hand -s /dev/ttyUSB0
+unitree@PC2:~$ cd DFX_inspire_service && mkdir build && cd build
+unitree@PC2:~/DFX_inspire_service/build$ cmake ..
+unitree@PC2:~/DFX_inspire_service/build$ make -j6
+
+# （For unitree g1）终端 1. 
+unitree@PC2:~/DFX_inspire_service/build$ sudo ./inspire_g1
+# 或（For unitree h1）终端 1. 
+unitree@PC2:~/DFX_inspire_service/build$ sudo ./inspire_h1 -s /dev/ttyUSB0
+
 # 终端 2. 运行示例
-unitree@PC2:~/h1_inspire_service/build$ ./h1_hand_example
+unitree@PC2:~/DFX_inspire_service/build$ ./hand_example
 ```
 
-如果两只手连续打开和关闭，则表示成功。一旦成功，即可关闭终端 2 中的 `./h1_hand_example` 程序。
+如果两只手连续打开和关闭，则表示成功。一旦成功，即可关闭终端 2 中的 `./hand_example` 程序。
 
 ## 3.3 ✋BrainCo 手部服务（可选）
 

@@ -334,27 +334,31 @@ After image service is started, you can use `image_client.py` **in the Host** te
 
 > **Note 1**: Skip this if your config does not use the Inspire hand.
 >
-> **Note 2**: For the G1 robot with [Inspire DFX hand](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand), see [issue #46](https://github.com/unitreerobotics/xr_teleoperate/issues/46).
+> **Note 2**: For G1 robot with [Inspire DFX hand](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand), related issue [#46](https://github.com/unitreerobotics/xr_teleoperate/issues/46).
 >
-> **Note 3**: For [Inspire FTP hand]((https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)), see  [issue #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48).
+> **Note 3**: For [Inspire FTP hand]((https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)), related issue [#48](https://github.com/unitreerobotics/xr_teleoperate/issues/48).
 
-You can refer to [Dexterous Hand Development](https://support.unitree.com/home/zh/H1_developer/Dexterous_hand) to configure related environments and compile control programs. First, use [this URL](https://oss-global-cdn.unitree.com/static/0a8335f7498548d28412c31ea047d4be.zip) to download the dexterous hand control interface program. Copy it to **PC2** of  Unitree robots. 
+First, use [this URL: DFX_inspire_service](https://github.com/unitreerobotics/DFX_inspire_service) to clone the dexterous hand control interface program. And Copy it to **PC2** of  Unitree robots. 
 
 On Unitree robot's **PC2**, execute command:
 
 ```bash
 unitree@PC2:~$ sudo apt install libboost-all-dev libspdlog-dev
 # Build project
-unitree@PC2:~$ cd h1_inspire_service & mkdir build & cd build
-unitree@PC2:~/h1_inspire_service/build$ cmake .. -DCMAKE_BUILD_TYPE=Release
-unitree@PC2:~/h1_inspire_service/build$ make
-# Terminal 1. Run h1 inspire hand service
-unitree@PC2:~/h1_inspire_service/build$ sudo ./inspire_hand -s /dev/ttyUSB0
+unitree@PC2:~$ cd DFX_inspire_service && mkdir build && cd build
+unitree@PC2:~/DFX_inspire_service/build$ cmake ..
+unitree@PC2:~/DFX_inspire_service/build$ make -j6
+
+# (For unitree g1) Terminal 1.
+unitree@PC2:~/DFX_inspire_service/build$ sudo ./inspire_g1
+# or (For unitree h1) Terminal 1.
+unitree@PC2:~/DFX_inspire_service/build$ sudo ./inspire_h1 -s /dev/ttyUSB0
+
 # Terminal 2. Run example
-unitree@PC2:~/h1_inspire_service/build$ ./h1_hand_example
+unitree@PC2:~/DFX_inspire_service/build$ ./hand_example
 ```
 
-If two hands open and close continuously, it indicates success. Once successful, close the `./h1_hand_example` program in Terminal 2.
+If two hands open and close continuously, it indicates success. Once successful, close the `./hand_example` program in Terminal 2.
 
 ## 3.3 ✋ BrainCo Hand Service (Optional)
 
