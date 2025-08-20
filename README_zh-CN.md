@@ -6,6 +6,9 @@
   <p align="center">
     <a href="README.md"> English </a> | <a>中文</a> | <a href="README_ja-JP.md">日本語</a>
   </p>
+  <p align="center">
+    <a href="https://github.com/unitreerobotics/xr_teleoperate/wiki">维基文档</a>
+  </p>
 </div>
 
 
