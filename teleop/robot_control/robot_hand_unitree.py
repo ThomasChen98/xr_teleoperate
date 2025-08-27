@@ -264,7 +264,7 @@ class Dex1_1_Gripper_Controller:
         self.gripper_sub_ready = False
         self.simulation_mode = simulation_mode
         
-        if filter:
+        if filter and not self.simulation_mode:
             self.smooth_filter = WeightedMovingFilter(np.array([0.5, 0.3, 0.2]), 2)
         else:
             self.smooth_filter = None
