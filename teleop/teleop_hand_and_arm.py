@@ -42,10 +42,10 @@ def on_press(key):
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
-    elif key == 'q':
+    elif key == 'q' and start_signal == True:
         stop_listening()
         running = False
-    elif key == 's':
+    elif key == 's' and start_signal == True:
         should_toggle_recording = True
     else:
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
