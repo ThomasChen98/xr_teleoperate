@@ -136,17 +136,17 @@ if __name__ == '__main__':
 
     # arm
     if args.arm == "G1_29":
-        arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
         arm_ik = G1_29_ArmIK()
+        arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
     elif args.arm == "G1_23":
-        arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
         arm_ik = G1_23_ArmIK()
+        arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
     elif args.arm == "H1_2":
-        arm_ctrl = H1_2_ArmController(simulation_mode=args.sim)
         arm_ik = H1_2_ArmIK()
+        arm_ctrl = H1_2_ArmController(simulation_mode=args.sim)
     elif args.arm == "H1":
-        arm_ctrl = H1_ArmController(simulation_mode=args.sim)
         arm_ik = H1_ArmIK()
+        arm_ctrl = H1_ArmController(simulation_mode=args.sim)
 
     # end-effector
     if args.ee == "dex3":
