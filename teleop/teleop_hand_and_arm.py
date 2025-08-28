@@ -213,6 +213,7 @@ if __name__ == '__main__':
                 cv2.imshow("record image", tv_resized_image)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
+                    stop_listening()
                     running = False
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
@@ -258,8 +259,8 @@ if __name__ == '__main__':
             if args.xr_mode == "controller" and args.motion:
                 # quit teleoperate
                 if tele_data.tele_state.right_aButton:
-                    running = False
                     stop_listening()
+                    running = False
                 # command robot to enter damping mode. soft emergency stop function
                 if tele_data.tele_state.left_thumbstick_state and tele_data.tele_state.right_thumbstick_state:
                     sport_client.Damp()
