@@ -11,12 +11,20 @@ import logging_mp
 logger_mp = logging_mp.get_logger(__name__)
 
 class EpisodeWriter():
-    def __init__(self, task_dir, frequency=30, image_size=[640, 480], rerun_log = True):
+    def __init__(self, task_dir, task_goal=None, frequency=30, image_size=[640, 480], rerun_log = True):
         """
         image_size: [width, height]
         """
         logger_mp.info("==> EpisodeWriter initializing...\n")
         self.task_dir = task_dir
+        self.text = {
+            "goal": "Pick up the red cup on the table.",
+            "desc": "task description",
+            "steps":"step1: do this; step2: do that; ...",
+        }
+        if task_goal is not None:
+            self.text['goal'] = task_goal
+
         self.frequency = frequency
         self.image_size = image_size
 
@@ -39,7 +47,6 @@ class EpisodeWriter():
             os.makedirs(self.task_dir)
             logger_mp.info(f"==> episode directory does not exist, now create one.\n")
         self.data_info()
-        self.text_desc()
 
         self.is_available = True  # Indicates whether the class is available for new operations
         # Initialize the queue and worker thread
@@ -73,12 +80,6 @@ class EpisodeWriter():
                 }, 
                 "sim_state": ""
             }
-    def text_desc(self):
-        self.text = {
-            "goal": "Pick up the red cup on the table.",
-            "desc": "Pick up the cup from the table and place it in another position. The operation should be smooth and the water in the cup should not spill out",
-            "steps":"step1: searching for cups. step2: go to the target location. step3: pick up the cup",
-        }
 
  
     def create_episode(self):
