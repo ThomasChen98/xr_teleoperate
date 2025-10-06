@@ -992,8 +992,8 @@ class H1_ArmIK:
             return current_lr_arm_motor_q, np.zeros(self.reduced_robot.model.nv)
         
 if __name__ == "__main__":
-    arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = True)
-    # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = True)
+    # arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = True)
+    arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = True)
     # arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = True)
     # arm_ik = H1_ArmIK(Unit_Test = True, Visualization = True)
 

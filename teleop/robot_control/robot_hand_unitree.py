@@ -420,7 +420,7 @@ if __name__ == "__main__":
     img_config = {
         'fps': 30,
         'head_camera_type': 'opencv',
-        'head_camera_image_shape': [480, 1280],  # Head camera resolution
+        'head_camera_image_shape': [480, 640],  # Head camera resolution
         'head_camera_id_numbers': [0],
     }
     ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular

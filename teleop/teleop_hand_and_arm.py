@@ -19,6 +19,7 @@ from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmControl
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Dex1_1_Gripper_Controller
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
+from teleop.robot_control.robot_hand_inspire_bridge import Inspire_Bridge_Controller
 from teleop.robot_control.robot_hand_brainco import Brainco_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
@@ -69,6 +70,12 @@ if __name__ == '__main__':
     parser.add_argument('--task-name', type = str, default = 'pick cube', help = 'task name for recording')
     parser.add_argument('--task-goal', type = str, default = 'e.g. pick the red cube on the table.', help = 'task goal for recording')
 
+    # inspire hand bridge parameters (for laptop-connected hands)
+    parser.add_argument('--inspire-bridge', action='store_true', help='Use bridge mode for Inspire hands (hands connected to laptop via network)')
+    parser.add_argument('--network-interface', type=str, default='eno1', help='Network interface for hand bridge (e.g., eno1, eth0, wlan0)')
+    parser.add_argument('--left-hand-ip', type=str, default='192.168.123.211', help='IP address of left Inspire hand')
+    parser.add_argument('--right-hand-ip', type=str, default='192.168.123.210', help='IP address of right Inspire hand')
+
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
 
@@ -76,7 +83,7 @@ if __name__ == '__main__':
     if args.sim:
         img_config = {
             'fps': 30,
-            'head_camera_type': 'opencv',
+            'head_camera_type': 'realsense',
             'head_camera_image_shape': [480, 640],  # Head camera resolution
             'head_camera_id_numbers': [0],
             'wrist_camera_type': 'opencv',
@@ -86,8 +93,8 @@ if __name__ == '__main__':
     else:
         img_config = {
             'fps': 30,
-            'head_camera_type': 'opencv',
-            'head_camera_image_shape': [480, 1280],  # Head camera resolution
+            'head_camera_type': 'realsense',
+            'head_camera_image_shape': [480, 640],  # Head camera resolution
             'head_camera_id_numbers': [0],
             'wrist_camera_type': 'opencv',
             'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
@@ -132,6 +139,19 @@ if __name__ == '__main__':
     image_receive_thread.daemon = True
     image_receive_thread.start()
 
+    # Initialize DDS with network interface if using inspire bridge mode
+    # This MUST be done before creating arm controller to ensure correct network interface
+    dds_already_initialized = False
+    if args.ee == "inspire1" and args.inspire_bridge:
+        from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+        logger_mp.info(f"Initializing DDS with network interface: {args.network_interface}")
+        if args.sim:
+            ChannelFactoryInitialize(1, args.network_interface)
+        else:
+            ChannelFactoryInitialize(0, args.network_interface)
+        logger_mp.info("DDS initialized with network interface for hand bridge")
+        dds_already_initialized = True
+
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
     tv_wrapper = TeleVuerWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == "hand", img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
                                  return_state_data=True, return_hand_rot_data = False)
@@ -171,7 +191,25 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
         dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-        hand_ctrl = Inspire_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+        # Choose controller based on bridge mode
+        if args.inspire_bridge:
+            logger_mp.info("Using Inspire Bridge Controller (hands connected to laptop)")
+            hand_ctrl = Inspire_Bridge_Controller(
+                left_hand_pos_array, right_hand_pos_array, 
+                dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, 
+                simulation_mode=args.sim,
+                network_interface=args.network_interface,
+                left_hand_ip=args.left_hand_ip,
+                right_hand_ip=args.right_hand_ip
+            )
+        else:
+            logger_mp.info("Using standard Inspire Controller (hands connected to PC2)")
+            hand_ctrl = Inspire_Controller(
+                left_hand_pos_array, right_hand_pos_array, 
+                dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, 
+                simulation_mode=args.sim
+            )
+
     elif args.ee == "brainco":
         left_hand_pos_array = Array('d', 75, lock = True)      # [input]
         right_hand_pos_array = Array('d', 75, lock = True)     # [input]

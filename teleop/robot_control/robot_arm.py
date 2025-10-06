@@ -1128,12 +1128,12 @@ if __name__ == "__main__":
     from robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
     import pinocchio as pin 
 
-    arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
-    arm = G1_29_ArmController(simulation_mode=True)
+    # arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = False)
+    # arm = G1_29_ArmController(simulation_mode=True)
     # arm_ik = G1_23_ArmIK(Unit_Test = True, Visualization = False)
     # arm = G1_23_ArmController()
-    # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = False)
-    # arm = H1_2_ArmController()
+    arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = False)
+    arm = H1_2_ArmController()
     # arm_ik = H1_ArmIK(Unit_Test = True, Visualization = True)
     # arm = H1_ArmController()
 
