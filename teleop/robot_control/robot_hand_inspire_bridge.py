@@ -71,6 +71,14 @@ class Inspire_Bridge_Controller:
         self.bridge_threads = []
         self.bridge_running = False
         
+        # Shared arrays for hand commands (output from control process)
+        self.left_hand_cmd_array = Array('d', Inspire_Num_Motors, lock=True)
+        self.right_hand_cmd_array = Array('d', Inspire_Num_Motors, lock=True)
+        # Initialize with open position
+        for i in range(Inspire_Num_Motors):
+            self.left_hand_cmd_array[i] = float(self.INSPIRE_HAND_OPEN)
+            self.right_hand_cmd_array[i] = float(self.INSPIRE_HAND_OPEN)
+        
         # Hand retargeting
         if not self.Unit_Test:
             self.hand_retargeting = HandRetargeting(HandType.INSPIRE_HAND)
@@ -112,7 +120,7 @@ class Inspire_Bridge_Controller:
         self.subscribe_state_thread.start()
 
         # Wait for hand state subscription (with timeout for simulation)
-        timeout = 120.0  # 120 second timeout
+        timeout = 20.0  # 20 second timeout
         start_time = time.time()
         while True:
             if any(self.right_hand_state_array):
@@ -124,19 +132,25 @@ class Inspire_Bridge_Controller:
                 else:
                     logger_mp.error("[Inspire_Bridge_Controller] Timeout waiting for hand state - check hand connections")
                     break
-            time.sleep(0.01)
+            time.sleep(1)
             logger_mp.warning("[Inspire_Bridge_Controller] Waiting to subscribe hand state...")
         
         logger_mp.info("[Inspire_Bridge_Controller] Hand state subscription ready")
 
-        # Start hand control process
+        # Start hand control process (computes targets, doesn't publish)
         hand_control_process = Process(
             target=self.control_process, 
             args=(left_hand_array, right_hand_array, self.left_hand_state_array, 
-                  self.right_hand_state_array, dual_hand_data_lock, 
+                  self.right_hand_state_array, self.left_hand_cmd_array, 
+                  self.right_hand_cmd_array, dual_hand_data_lock, 
                   dual_hand_state_array, dual_hand_action_array))
         hand_control_process.daemon = True
         hand_control_process.start()
+        
+        # Start publishing thread in main process (reads from cmd arrays and publishes)
+        self.publish_thread = threading.Thread(target=self._publish_hand_commands)
+        self.publish_thread.daemon = True
+        self.publish_thread.start()
 
         logger_mp.info("Initialize Inspire_Bridge_Controller OK!\n")
 
@@ -202,14 +216,32 @@ class Inspire_Bridge_Controller:
         """Run a single bridge (DDS ↔ Modbus)"""
         logger_mp.info(f"{name} bridge thread started")
         
+        read_count = 0
+        error_count = 0
+        last_log_time = time.time()
+        
         while self.bridge_running:
             try:
                 # This reads from physical hand and publishes state to DDS
                 # Also listens for DDS commands and sends them to physical hand
                 data = handler.read()
+                read_count += 1
+                
+                # Log bridge activity every 5 seconds
+                if time.time() - last_log_time > 5.0:
+                    logger_mp.info(f"{name} bridge: {read_count} reads, {error_count} errors in last 5s")
+                    if data is not None and hasattr(data, 'angle_cur'):
+                        logger_mp.info(f"{name} bridge data sample: angle_cur={data.angle_cur[:3]}")
+                    else:
+                        logger_mp.warning(f"{name} bridge: No valid data returned from read()")
+                    read_count = 0
+                    error_count = 0
+                    last_log_time = time.time()
+                
                 time.sleep(0.02)  # ~50Hz bridge update
                 
             except Exception as e:
+                error_count += 1
                 logger_mp.error(f"{name} bridge error: {e}")
                 time.sleep(1)
 
@@ -242,6 +274,18 @@ class Inspire_Bridge_Controller:
                 
             time.sleep(0.002)
 
+    def _publish_hand_commands(self):
+        """Publish hand commands from shared arrays"""
+        logger_mp.info("Hand command publishing thread started")
+        while True:
+            try:
+                left_q_target = np.array(self.left_hand_cmd_array[:])
+                right_q_target = np.array(self.right_hand_cmd_array[:])
+                self.ctrl_dual_hand(left_q_target, right_q_target)
+            except Exception as e:
+                logger_mp.error(f"Hand command publish error: {e}")
+            time.sleep(1 / self.fps)
+
     def ctrl_dual_hand(self, left_q_target, right_q_target):
         """
         Send position commands to both hands using inspire_hand_ctrl message format
@@ -271,8 +315,9 @@ class Inspire_Bridge_Controller:
         self.RightHandCmd_publisher.Write(right_cmd)
     
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, 
-                       right_hand_state_array, dual_hand_data_lock=None, 
-                       dual_hand_state_array=None, dual_hand_action_array=None):
+                       right_hand_state_array, left_hand_cmd_array, right_hand_cmd_array,
+                       dual_hand_data_lock=None, dual_hand_state_array=None, 
+                       dual_hand_action_array=None):
         """Main control loop that runs in separate process"""
         self.running = True
 
@@ -280,9 +325,15 @@ class Inspire_Bridge_Controller:
         left_q_target = np.full(Inspire_Num_Motors, float(self.INSPIRE_HAND_OPEN))
         right_q_target = np.full(Inspire_Num_Motors, float(self.INSPIRE_HAND_OPEN))
 
+        # Debug counters
+        loop_count = 0
+        retargeting_active_count = 0
+        last_log_time = time.time()
+
         try:
             while self.running:
                 start_time = time.time()
+                loop_count += 1
                 
                 # Get dual hand skeleton data from XR device
                 with left_hand_array.get_lock():
@@ -296,8 +347,24 @@ class Inspire_Bridge_Controller:
                     np.array(right_hand_state_array[:])
                 ))
 
+                # Debug logging every 2 seconds
+                if time.time() - last_log_time > 2.0:
+                    logger_mp.info(f"[Hand Control] Loop count: {loop_count}, Retargeting active: {retargeting_active_count}/{loop_count}")
+                    logger_mp.info(f"[Hand Control] Right hand data sample: {right_hand_data[0]}")
+                    logger_mp.info(f"[Hand Control] Left hand data[4]: {left_hand_data[4]}")
+                    logger_mp.info(f"[Hand Control] Current targets - Left: {left_q_target[:2]}, Right: {right_q_target[:2]}")
+                    logger_mp.info(f"[Hand Control] Hand states - Left: {state_data[:3]}, Right: {state_data[6:9]}")
+                    last_log_time = time.time()
+                    loop_count = 0
+                    retargeting_active_count = 0
+
                 # Check if hand data has been initialized (not all zeros and not default position)
-                if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])):
+                is_right_hand_valid = not np.all(right_hand_data == 0.0)
+                is_left_hand_valid = not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15]))
+                
+                if is_right_hand_valid and is_left_hand_valid:
+                    retargeting_active_count += 1
+                    
                     # Retarget hand skeleton to inspire hand angles
                     ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - \
                                     left_hand_data[self.hand_retargeting.left_indices[0,:]]
@@ -339,8 +406,11 @@ class Inspire_Bridge_Controller:
                         dual_hand_state_array[:] = state_data
                         dual_hand_action_array[:] = action_data
 
-                # Send commands to hands
-                self.ctrl_dual_hand(left_q_target, right_q_target)
+                # Write commands to shared arrays (publishing thread will send them)
+                with left_hand_cmd_array.get_lock():
+                    left_hand_cmd_array[:] = left_q_target
+                with right_hand_cmd_array.get_lock():
+                    right_hand_cmd_array[:] = right_q_target
                 
                 # Maintain control frequency
                 current_time = time.time()

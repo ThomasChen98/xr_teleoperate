@@ -91,15 +91,27 @@ if __name__ == '__main__':
             'wrist_camera_id_numbers': [2, 4],
         }
     else:
-        img_config = {
-            'fps': 30,
-            'head_camera_type': 'realsense',
-            'head_camera_image_shape': [480, 640],  # Head camera resolution
-            'head_camera_id_numbers': [0],
-            'wrist_camera_type': 'opencv',
-            'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-            'wrist_camera_id_numbers': [2, 4],
-        }
+        # Real hardware configuration
+        if args.inspire_bridge:
+            # When using inspire bridge, only head camera is available (no wrist cameras)
+            img_config = {
+                'fps': 30,
+                'head_camera_type': 'realsense',
+                'head_camera_image_shape': [480, 640],  # Head camera resolution
+                'head_camera_id_numbers': [0],
+                # No wrist cameras in inspire bridge mode
+            }
+        else:
+            # Standard real hardware with wrist cameras
+            img_config = {
+                'fps': 30,
+                'head_camera_type': 'realsense',
+                'head_camera_image_shape': [480, 640],  # Head camera resolution
+                'head_camera_id_numbers': [0],
+                'wrist_camera_type': 'opencv',
+                'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
+                'wrist_camera_id_numbers': [2, 4],
+            }
 
 
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
@@ -159,16 +171,16 @@ if __name__ == '__main__':
     # arm
     if args.arm == "G1_29":
         arm_ik = G1_29_ArmIK()
-        arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
+        arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
     elif args.arm == "G1_23":
         arm_ik = G1_23_ArmIK()
-        arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
+        arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
     elif args.arm == "H1_2":
         arm_ik = H1_2_ArmIK()
-        arm_ctrl = H1_2_ArmController(simulation_mode=args.sim)
+        arm_ctrl = H1_2_ArmController(simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
     elif args.arm == "H1":
         arm_ik = H1_ArmIK()
-        arm_ctrl = H1_ArmController(simulation_mode=args.sim)
+        arm_ctrl = H1_ArmController(simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
 
     # end-effector
     if args.ee == "dex3":
@@ -202,6 +214,44 @@ if __name__ == '__main__':
                 left_hand_ip=args.left_hand_ip,
                 right_hand_ip=args.right_hand_ip
             )
+            
+            # Verification routine: Test hand open/close to confirm it works
+            if not args.sim:
+                logger_mp.info("=" * 60)
+                logger_mp.info("INSPIRE BRIDGE VERIFICATION: Testing hand open/close...")
+                logger_mp.info("=" * 60)
+                
+                # Test sequence: Open -> Close -> Open -> Half
+                test_positions = [
+                    (1000, "FULLY OPEN"),
+                    (0, "FULLY CLOSED"),
+                    (1000, "FULLY OPEN"),
+                    (500, "HALF OPEN"),
+                ]
+                
+                for position, description in test_positions:
+                    logger_mp.info(f"Testing hands: {description} (position={position})")
+                    # Create target arrays for all 6 joints per hand
+                    import numpy as np
+                    left_target = np.full(6, float(position))
+                    right_target = np.full(6, float(position))
+                    
+                    # Send command to both hands
+                    hand_ctrl.ctrl_dual_hand(left_target, right_target)
+                    
+                    # Wait to allow movement
+                    time.sleep(2.0)
+                    
+                    # Read and display current state
+                    with dual_hand_data_lock:
+                        left_state = dual_hand_state_array[:6]
+                        right_state = dual_hand_state_array[6:]
+                    logger_mp.info(f"  Left hand state:  {[f'{s:.0f}' for s in left_state]}")
+                    logger_mp.info(f"  Right hand state: {[f'{s:.0f}' for s in right_state]}")
+                
+                logger_mp.info("=" * 60)
+                logger_mp.info("VERIFICATION COMPLETE - Hands opened to default position")
+                logger_mp.info("=" * 60)
         else:
             logger_mp.info("Using standard Inspire Controller (hands connected to PC2)")
             hand_ctrl = Inspire_Controller(

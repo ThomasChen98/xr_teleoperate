@@ -59,7 +59,7 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self, motion_mode = False, simulation_mode = False):
+    def __init__(self, motion_mode = False, simulation_mode = False, dds_already_initialized = False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
@@ -81,10 +81,13 @@ class G1_29_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
+        if not dds_already_initialized:
+            if self.simulation_mode:
+                ChannelFactoryInitialize(1)
+            else:
+                ChannelFactoryInitialize(0)
         else:
-            ChannelFactoryInitialize(0)
+            logger_mp.info("[G1_29_ArmController] DDS already initialized, skipping ChannelFactoryInitialize")
 
         if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
@@ -345,20 +348,20 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class G1_23_ArmController:
-    def __init__(self, motion_mode = False, simulation_mode = False):
-        self.simulation_mode = simulation_mode
+    def __init__(self, motion_mode = False, simulation_mode = False, dds_already_initialized = False):
         self.motion_mode = motion_mode
-
+        self.simulation_mode = simulation_mode
+        
         logger_mp.info("Initialize G1_23_ArmController...")
         self.q_target = np.zeros(10)
         self.tauff_target = np.zeros(10)
 
         self.kp_high = 300.0
-        self.kd_high = 3.0
-        self.kp_low = 80.0
+        self.kd_high = 5.0
+        self.kp_low = 140.0
         self.kd_low = 3.0
-        self.kp_wrist = 40.0
-        self.kd_wrist = 1.5
+        self.kp_wrist = 50.0
+        self.kd_wrist = 2.0
 
         self.all_motor_q = None
         self.arm_velocity_limit = 20.0
@@ -369,10 +372,13 @@ class G1_23_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
+        if not dds_already_initialized:
+            if self.simulation_mode:
+                ChannelFactoryInitialize(1)
+            else:
+                ChannelFactoryInitialize(0)
         else:
-            ChannelFactoryInitialize(0)
+            logger_mp.info("[G1_23_ArmController] DDS already initialized, skipping ChannelFactoryInitialize")
         
         if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
@@ -625,7 +631,7 @@ class G1_23_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 class H1_2_ArmController:
-    def __init__(self, simulation_mode = False):
+    def __init__(self, simulation_mode = False, dds_already_initialized = False):
         self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize H1_2_ArmController...")
@@ -648,10 +654,13 @@ class H1_2_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
+        if not dds_already_initialized:
+            if self.simulation_mode:
+                ChannelFactoryInitialize(1)
+            else:
+                ChannelFactoryInitialize(0)
         else:
-            ChannelFactoryInitialize(0)
+            logger_mp.info("[H1_2_ArmController] DDS already initialized, skipping ChannelFactoryInitialize")
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
@@ -900,7 +909,7 @@ class H1_2_JointIndex(IntEnum):
     kNotUsedJoint7 = 34
 
 class H1_ArmController:
-    def __init__(self, simulation_mode = False):
+    def __init__(self, simulation_mode = False, dds_already_initialized = False):
         self.simulation_mode = simulation_mode
         
         logger_mp.info("Initialize H1_ArmController...")
@@ -921,10 +930,13 @@ class H1_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
+        if not dds_already_initialized:
+            if self.simulation_mode:
+                ChannelFactoryInitialize(1)
+            else:
+                ChannelFactoryInitialize(0)
         else:
-            ChannelFactoryInitialize(0)
+            logger_mp.info("[H1_ArmController] DDS already initialized, skipping ChannelFactoryInitialize")
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, go_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, go_LowState)
