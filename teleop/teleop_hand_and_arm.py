@@ -23,6 +23,7 @@ from teleop.robot_control.robot_hand_inspire_bridge import Inspire_Bridge_Contro
 from teleop.robot_control.robot_hand_brainco import Brainco_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
+from teleop.utils.episode_writer_hdf5 import EpisodeWriterHDF5
 from sshkeyboard import listen_keyboard, stop_listening
 
 # for simulation
@@ -44,6 +45,9 @@ def on_press(key):
         start_signal = True
         logger_mp.info("Program start signal received.")
     elif key == 'q' and start_signal == True:
+        logger_mp.info("=" * 60)
+        logger_mp.info("QUIT: 'q' pressed - Initiating shutdown sequence...")
+        logger_mp.info("=" * 60)
         stop_listening()
         running = False
     elif key == 's' and start_signal == True:
@@ -286,9 +290,21 @@ if __name__ == '__main__':
     
     # record + headless mode
     if args.record and args.headless:
-        recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_goal, frequency = args.frequency, rerun_log = False)
+        # Use HDF5 writer for msc_humanoid_visual compatibility
+        recorder = EpisodeWriterHDF5(
+            save_dir=args.task_dir + args.task_name,
+            robot_name=args.arm,
+            fps=args.frequency
+        )
+        logger_mp.info(f"HDF5 Episode recorder initialized (headless mode)")
     elif args.record and not args.headless:
-        recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_goal, frequency = args.frequency, rerun_log = True)
+        # Use HDF5 writer for msc_humanoid_visual compatibility
+        recorder = EpisodeWriterHDF5(
+            save_dir=args.task_dir + args.task_name,
+            robot_name=args.arm,
+            fps=args.frequency
+        )
+        logger_mp.info(f"HDF5 Episode recorder initialized")
         
     try:
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
@@ -316,13 +332,13 @@ if __name__ == '__main__':
             if args.record and should_toggle_recording:
                 should_toggle_recording = False
                 if not is_recording:
-                    if recorder.create_episode():
-                        is_recording = True
-                    else:
-                        logger_mp.error("Failed to create episode. Recording not started.")
+                    recorder.start_recording()
+                    is_recording = True
+                    logger_mp.info("==> Recording started")
                 else:
+                    recorder.stop_recording()
                     is_recording = False
-                    recorder.save_episode()
+                    logger_mp.info("==> Recording stopped and saved")
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
             # get input data
@@ -371,128 +387,53 @@ if __name__ == '__main__':
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
             # record data
-            if args.record:
-                # dex hand or gripper
+            if args.record and is_recording:
+                # Get hand state and actions
                 if args.ee == "dex3" and args.xr_mode == "hand":
                     with dual_hand_data_lock:
-                        left_ee_state = dual_hand_state_array[:7]
-                        right_ee_state = dual_hand_state_array[-7:]
-                        left_hand_action = dual_hand_action_array[:7]
-                        right_hand_action = dual_hand_action_array[-7:]
-                        current_body_state = []
-                        current_body_action = []
-                elif args.ee == "dex1" and args.xr_mode == "hand":
+                        hand_state = np.array(dual_hand_state_array[:])  # [14] - left+right
+                        hand_action = np.array(dual_hand_action_array[:])
+                elif args.ee == "dex1":
                     with dual_gripper_data_lock:
-                        left_ee_state = [dual_gripper_state_array[0]]
-                        right_ee_state = [dual_gripper_state_array[1]]
-                        left_hand_action = [dual_gripper_action_array[0]]
-                        right_hand_action = [dual_gripper_action_array[1]]
-                        current_body_state = []
-                        current_body_action = []
-                elif args.ee == "dex1" and args.xr_mode == "controller":
-                    with dual_gripper_data_lock:
-                        left_ee_state = [dual_gripper_state_array[0]]
-                        right_ee_state = [dual_gripper_state_array[1]]
-                        left_hand_action = [dual_gripper_action_array[0]]
-                        right_hand_action = [dual_gripper_action_array[1]]
-                        current_body_state = arm_ctrl.get_current_motor_q().tolist()
-                        current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                               -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                               -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
+                        hand_state = np.array(dual_gripper_state_array[:])  # [2] - left+right
+                        hand_action = np.array(dual_gripper_action_array[:])
                 elif (args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
                     with dual_hand_data_lock:
-                        left_ee_state = dual_hand_state_array[:6]
-                        right_ee_state = dual_hand_state_array[-6:]
-                        left_hand_action = dual_hand_action_array[:6]
-                        right_hand_action = dual_hand_action_array[-6:]
-                        current_body_state = []
-                        current_body_action = []
+                        hand_state = np.array(dual_hand_state_array[:])  # [12] - left+right
+                        hand_action = np.array(dual_hand_action_array[:])
                 else:
-                    left_ee_state = []
-                    right_ee_state = []
-                    left_hand_action = []
-                    right_hand_action = []
-                    current_body_state = []
-                    current_body_action = []
-                # head image
+                    hand_state = np.array([])
+                    hand_action = np.array([])
+                
+                # Combine arm and hand states into full qpos/qvel/action
+                full_qpos = np.concatenate([current_lr_arm_q, hand_state])
+                full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
+                full_action = np.concatenate([sol_q, hand_action])
+                
+                # Prepare camera images in msc_humanoid_visual format
+                images = {}
                 current_tv_image = tv_img_array.copy()
-                # wrist image
+                
+                if BINOCULAR:
+                    # Split binocular image into left and right
+                    images["cam_high"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
+                    # Could also save right eye as separate camera if needed
+                else:
+                    images["cam_high"] = current_tv_image
+                
+                # Add wrist cameras if available
                 if WRIST:
                     current_wrist_image = wrist_img_array.copy()
-                # arm state and action
-                left_arm_state  = current_lr_arm_q[:7]
-                right_arm_state = current_lr_arm_q[-7:]
-                left_arm_action = sol_q[:7]
-                right_arm_action = sol_q[-7:]
-                if is_recording:
-                    colors = {}
-                    depths = {}
-                    if BINOCULAR:
-                        colors[f"color_{0}"] = current_tv_image[:, :tv_img_shape[1]//2]
-                        colors[f"color_{1}"] = current_tv_image[:, tv_img_shape[1]//2:]
-                        if WRIST:
-                            colors[f"color_{2}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                            colors[f"color_{3}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
-                    else:
-                        colors[f"color_{0}"] = current_tv_image
-                        if WRIST:
-                            colors[f"color_{1}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                            colors[f"color_{2}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
-                    states = {
-                        "left_arm": {                                                                    
-                            "qpos":   left_arm_state.tolist(),    # numpy.array -> list
-                            "qvel":   [],                          
-                            "torque": [],                        
-                        }, 
-                        "right_arm": {                                                                    
-                            "qpos":   right_arm_state.tolist(),       
-                            "qvel":   [],                          
-                            "torque": [],                         
-                        },                        
-                        "left_ee": {                                                                    
-                            "qpos":   left_ee_state,           
-                            "qvel":   [],                           
-                            "torque": [],                          
-                        }, 
-                        "right_ee": {                                                                    
-                            "qpos":   right_ee_state,       
-                            "qvel":   [],                           
-                            "torque": [],  
-                        }, 
-                        "body": {
-                            "qpos": current_body_state,
-                        }, 
-                    }
-                    actions = {
-                        "left_arm": {                                   
-                            "qpos":   left_arm_action.tolist(),       
-                            "qvel":   [],       
-                            "torque": [],      
-                        }, 
-                        "right_arm": {                                   
-                            "qpos":   right_arm_action.tolist(),       
-                            "qvel":   [],       
-                            "torque": [],       
-                        },                         
-                        "left_ee": {                                   
-                            "qpos":   left_hand_action,       
-                            "qvel":   [],       
-                            "torque": [],       
-                        }, 
-                        "right_ee": {                                   
-                            "qpos":   right_hand_action,       
-                            "qvel":   [],       
-                            "torque": [], 
-                        }, 
-                        "body": {
-                            "qpos": current_body_action,
-                        }, 
-                    }
-                    if args.sim:
-                        sim_state = sim_state_subscriber.read_data()            
-                        recorder.add_item(colors=colors, depths=depths, states=states, actions=actions, sim_state=sim_state)
-                    else:
-                        recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
+                    images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2]
+                    images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                
+                # Add timestep to HDF5 episode
+                recorder.add_timestep(
+                    qpos=full_qpos,
+                    qvel=full_qvel,
+                    action=full_action,
+                    images=images
+                )
 
             current_time = time.time()
             time_elapsed = current_time - start_time
@@ -501,8 +442,11 @@ if __name__ == '__main__':
             logger_mp.debug(f"main process sleep: {sleep_time}")
 
     except KeyboardInterrupt:
-        logger_mp.info("KeyboardInterrupt, exiting program...")
+        logger_mp.info("=" * 60)
+        logger_mp.info("SHUTDOWN: KeyboardInterrupt received, exiting program...")
+        logger_mp.info("=" * 60)
     finally:
+        logger_mp.info("Shutting down robot control...")
         arm_ctrl.ctrl_dual_arm_go_home()
         if args.sim:
             sim_state_subscriber.stop_subscribe()
@@ -512,7 +456,16 @@ if __name__ == '__main__':
             wrist_img_shm.close()
             wrist_img_shm.unlink()
         if args.record:
-            recorder.close()
+            # Stop and save any active recording
+            if recorder.is_recording():
+                logger_mp.info("=" * 60)
+                logger_mp.info("SAVING EPISODE: Please wait, this may take 30-60 seconds...")
+                logger_mp.info("DO NOT interrupt or data will be lost!")
+                logger_mp.info("=" * 60)
+                recorder.stop_recording()
+                logger_mp.info("=" * 60)
+                logger_mp.info("EPISODE SAVED SUCCESSFULLY!")
+                logger_mp.info("=" * 60)
         listen_keyboard_thread.join()
-        logger_mp.info("Finally, exiting program...")
+        logger_mp.info("Program exited cleanly.")
         exit(0)

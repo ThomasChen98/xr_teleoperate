@@ -216,34 +216,15 @@ class Inspire_Bridge_Controller:
         """Run a single bridge (DDS ↔ Modbus)"""
         logger_mp.info(f"{name} bridge thread started")
         
-        read_count = 0
-        error_count = 0
-        last_log_time = time.time()
-        
         while self.bridge_running:
             try:
                 # This reads from physical hand and publishes state to DDS
-                # Also listens for DDS commands and sends them to physical hand
-                data = handler.read()
-                read_count += 1
-                
-                # Log bridge activity every 5 seconds
-                if time.time() - last_log_time > 5.0:
-                    logger_mp.info(f"{name} bridge: {read_count} reads, {error_count} errors in last 5s")
-                    if data is not None and hasattr(data, 'angle_cur'):
-                        logger_mp.info(f"{name} bridge data sample: angle_cur={data.angle_cur[:3]}")
-                    else:
-                        logger_mp.warning(f"{name} bridge: No valid data returned from read()")
-                    read_count = 0
-                    error_count = 0
-                    last_log_time = time.time()
-                
+                # Also listens for DDS commands and sends them to physical hands
+                handler.read()
                 time.sleep(0.02)  # ~50Hz bridge update
-                
             except Exception as e:
-                error_count += 1
                 logger_mp.error(f"{name} bridge error: {e}")
-                time.sleep(1)
+                time.sleep(0.1)
 
     def stop_bridges(self):
         """Stop all bridge threads"""
@@ -316,8 +297,8 @@ class Inspire_Bridge_Controller:
     
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, 
                        right_hand_state_array, left_hand_cmd_array, right_hand_cmd_array,
-                       dual_hand_data_lock=None, dual_hand_state_array=None, 
-                       dual_hand_action_array=None):
+                       dual_hand_data_lock=None, 
+                       dual_hand_state_array=None, dual_hand_action_array=None):
         """Main control loop that runs in separate process"""
         self.running = True
 
@@ -325,15 +306,9 @@ class Inspire_Bridge_Controller:
         left_q_target = np.full(Inspire_Num_Motors, float(self.INSPIRE_HAND_OPEN))
         right_q_target = np.full(Inspire_Num_Motors, float(self.INSPIRE_HAND_OPEN))
 
-        # Debug counters
-        loop_count = 0
-        retargeting_active_count = 0
-        last_log_time = time.time()
-
         try:
             while self.running:
                 start_time = time.time()
-                loop_count += 1
                 
                 # Get dual hand skeleton data from XR device
                 with left_hand_array.get_lock():
@@ -347,24 +322,11 @@ class Inspire_Bridge_Controller:
                     np.array(right_hand_state_array[:])
                 ))
 
-                # Debug logging every 2 seconds
-                if time.time() - last_log_time > 2.0:
-                    logger_mp.info(f"[Hand Control] Loop count: {loop_count}, Retargeting active: {retargeting_active_count}/{loop_count}")
-                    logger_mp.info(f"[Hand Control] Right hand data sample: {right_hand_data[0]}")
-                    logger_mp.info(f"[Hand Control] Left hand data[4]: {left_hand_data[4]}")
-                    logger_mp.info(f"[Hand Control] Current targets - Left: {left_q_target[:2]}, Right: {right_q_target[:2]}")
-                    logger_mp.info(f"[Hand Control] Hand states - Left: {state_data[:3]}, Right: {state_data[6:9]}")
-                    last_log_time = time.time()
-                    loop_count = 0
-                    retargeting_active_count = 0
-
                 # Check if hand data has been initialized (not all zeros and not default position)
                 is_right_hand_valid = not np.all(right_hand_data == 0.0)
                 is_left_hand_valid = not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15]))
                 
                 if is_right_hand_valid and is_left_hand_valid:
-                    retargeting_active_count += 1
-                    
                     # Retarget hand skeleton to inspire hand angles
                     ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - \
                                     left_hand_data[self.hand_retargeting.left_indices[0,:]]
@@ -377,11 +339,7 @@ class Inspire_Bridge_Controller:
                         self.hand_retargeting.right_dex_retargeting_to_hardware]
 
                     # Convert from radians to inspire hand units (0-1000)
-                    # Inspire hand convention: 0 = closed, 1000 = open
-                    # Joint ranges from URDF/retargeting:
-                    #   - idx 0-3 (fingers): 0~1.7 rad (1.7 = closed)
-                    #   - idx 4 (thumb bend): 0~0.5 rad
-                    #   - idx 5 (thumb rotation): -0.1~1.3 rad
+                    # ...existing normalization code...
                     
                     def normalize(val, min_val, max_val):
                         """Normalize value to [0, 1000] with inversion (high rad = closed = low inspire value)"""
