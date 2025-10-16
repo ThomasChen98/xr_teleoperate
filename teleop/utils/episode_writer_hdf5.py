@@ -9,7 +9,7 @@ File structure:
     qpos: [T, N_joints] - joint positions (arm + hand)
     qvel: [T, N_joints] - joint velocities
     images/
-        cam_high: [T, H, W, 3] - RGB images
+        ego_cam: [T, H, W, 3] - RGB images
         cam_low: [T, H, W, 3]
         cam_left_wrist: [T, H, W, 3]
         cam_right_wrist: [T, H, W, 3]

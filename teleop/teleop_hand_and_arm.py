@@ -416,10 +416,10 @@ if __name__ == '__main__':
                 
                 if BINOCULAR:
                     # Split binocular image into left and right
-                    images["cam_high"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
+                    images["ego_cam"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
                     # Could also save right eye as separate camera if needed
                 else:
-                    images["cam_high"] = current_tv_image
+                    images["ego_cam"] = current_tv_image
                 
                 # Add wrist cameras if available
                 if WRIST:
