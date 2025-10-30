@@ -14,6 +14,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
+import yaml
+
 from televuer import TeleVuerWrapper
 from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
@@ -24,6 +26,7 @@ from teleop.robot_control.robot_hand_brainco import Brainco_Controller
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.episode_writer_hdf5 import EpisodeWriterHDF5
+from teleop.utils.realsense_multi_capture import MultiRealsenseCapture
 from sshkeyboard import listen_keyboard, stop_listening
 
 # for simulation
@@ -73,6 +76,10 @@ if __name__ == '__main__':
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
     parser.add_argument('--task-name', type = str, default = 'pick cube', help = 'task name for recording')
     parser.add_argument('--task-goal', type = str, default = 'e.g. pick the red cube on the table.', help = 'task goal for recording')
+
+    # multi-camera parameters
+    parser.add_argument('--use-multi-camera', action='store_true', help='Enable multi-camera capture from laptop-connected RealSense cameras')
+    parser.add_argument('--camera-config', type=str, default='./config/camera_config.yaml', help='Path to camera configuration file')
 
     # inspire hand bridge parameters (for laptop-connected hands)
     parser.add_argument('--inspire-bridge', action='store_true', help='Use bridge mode for Inspire hands (hands connected to laptop via network)')
@@ -155,8 +162,59 @@ if __name__ == '__main__':
     image_receive_thread.daemon = True
     image_receive_thread.start()
 
+    # Initialize multi-camera capture system (laptop-connected RealSense cameras)
+    multi_camera_capture = None
+    if args.use_multi_camera:
+        logger_mp.info("=" * 60)
+        logger_mp.info("MULTI-CAMERA SETUP: Loading configuration...")
+        logger_mp.info("=" * 60)
+        
+        # Load camera configuration
+        camera_config_path = os.path.join(current_dir, args.camera_config)
+        if not os.path.exists(camera_config_path):
+            logger_mp.error(f"Camera config file not found: {camera_config_path}")
+            logger_mp.error("Please create config/camera_config.yaml with your camera serial numbers")
+            logger_mp.error("Run: python3 teleop/scripts/detect_cameras.py to find serial numbers")
+        else:
+            with open(camera_config_path, 'r') as f:
+                camera_yaml = yaml.safe_load(f)
+            
+            camera_config = camera_yaml.get('cameras', {})
+            camera_settings = camera_yaml.get('settings', {})
+            
+            # Filter out placeholder serial numbers
+            active_cameras = {name: serial for name, serial in camera_config.items() 
+                            if serial != "REPLACE_WITH_SERIAL" and serial}
+            
+            if len(active_cameras) == 0:
+                logger_mp.warning("No valid camera serial numbers found in config")
+                logger_mp.warning("Please update config/camera_config.yaml with actual serial numbers")
+                logger_mp.warning("Run: python3 teleop/scripts/detect_cameras.py to find them")
+            else:
+                logger_mp.info(f"Found {len(active_cameras)} configured RealSense camera(s):")
+                for name, serial in active_cameras.items():
+                    logger_mp.info(f"  - {name}: {serial}")
+                
+                # Initialize multi-camera capture
+                multi_camera_capture = MultiRealsenseCapture(
+                    camera_config=active_cameras,
+                    fps=camera_settings.get('fps', 30),
+                    width=camera_settings.get('width', 640),
+                    height=camera_settings.get('height', 480)
+                )
+                
+                # Start capture (runs in background threads)
+                success = multi_camera_capture.start()
+                if success:
+                    logger_mp.info("=" * 60)
+                    logger_mp.info("MULTI-CAMERA: RealSense capture started successfully")
+                    logger_mp.info(f"Active cameras: {multi_camera_capture.get_active_cameras()}")
+                    logger_mp.info("=" * 60)
+                else:
+                    logger_mp.error("Failed to start RealSense multi-camera capture")
+                    multi_camera_capture = None
+
     # Initialize DDS with network interface if using inspire bridge mode
-    # This MUST be done before creating arm controller to ensure correct network interface
     dds_already_initialized = False
     if args.ee == "inspire1" and args.inspire_bridge:
         from unitree_sdk2py.core.channel import ChannelFactoryInitialize
@@ -417,12 +475,24 @@ if __name__ == '__main__':
                 if BINOCULAR:
                     # Split binocular image into left and right
                     images["ego_cam"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
-                    # Could also save right eye as separate camera if needed
                 else:
                     images["ego_cam"] = current_tv_image
                 
-                # Add wrist cameras if available
-                if WRIST:
+                # Add laptop-connected RealSense palm cameras (overrides robot wrist cameras)
+                if multi_camera_capture is not None and multi_camera_capture.is_running():
+                    multi_frames = multi_camera_capture.get_latest_frames()
+                    for cam_name, frame in multi_frames.items():
+                        if frame is not None:
+                            # Map palm cameras to wrist camera names for HDF5 compatibility
+                            if cam_name == "palm_left":
+                                images["cam_left_wrist"] = frame
+                            elif cam_name == "palm_right":
+                                images["cam_right_wrist"] = frame
+                            else:
+                                # Any other cameras keep their original names
+                                images[cam_name] = frame
+                elif WRIST:
+                    # Fallback to robot wrist cameras if multi-camera not active
                     current_wrist_image = wrist_img_array.copy()
                     images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2]
                     images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:]
@@ -455,6 +525,12 @@ if __name__ == '__main__':
         if WRIST:
             wrist_img_shm.close()
             wrist_img_shm.unlink()
+        
+        # Stop multi-camera capture if running
+        if multi_camera_capture is not None:
+            logger_mp.info("Stopping RealSense multi-camera capture...")
+            multi_camera_capture.stop()
+        
         if args.record:
             # Stop and save any active recording
             if recorder.is_recording():

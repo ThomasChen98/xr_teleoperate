@@ -39,7 +39,7 @@ def test_writer():
         
         # Create test image
         image = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-        images = {'cam_high': image}
+        images = {'ego_cam': image}
         
         writer.add_timestep(qpos, qvel, action, images)
         print(f"Added timestep {i+1}/{num_timesteps}")
