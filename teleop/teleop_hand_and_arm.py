@@ -108,20 +108,19 @@ if __name__ == '__main__':
             img_config = {
                 'fps': 30,
                 'head_camera_type': 'realsense',
-                'head_camera_image_shape': [480, 640],  # Head camera resolution
-                'head_camera_id_numbers': [0],
+                'head_camera_image_shape': [480, 640],  # Single head camera resolution
+                'head_camera_id_numbers': [0],  # ONE head camera from robot
                 # No wrist cameras in inspire bridge mode
             }
         else:
-            # Standard real hardware with wrist cameras
+            # Standard real hardware - single head camera from robot
+            # Wrist cameras come from laptop via --use-multi-camera flag
             img_config = {
                 'fps': 30,
                 'head_camera_type': 'realsense',
-                'head_camera_image_shape': [480, 640],  # Head camera resolution
-                'head_camera_id_numbers': [0],
-                'wrist_camera_type': 'opencv',
-                'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-                'wrist_camera_id_numbers': [2, 4],
+                'head_camera_image_shape': [480, 640],  # Single head camera resolution
+                'head_camera_id_numbers': [0],  # ONE head camera from robot
+                # No wrist cameras in config - use --use-multi-camera for wrist cams
             }
 
 
