@@ -60,7 +60,8 @@ listen_keyboard_thread.start()
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data/', help = 'path to save data')
-    parser.add_argument('--frequency', type = float, default = 60.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 60.0, help = 'control loop frequency (Hz)')
+    parser.add_argument('--recording-frequency', type = float, default = 30.0, help = 'data recording frequency (Hz), can be lower than control frequency')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
@@ -289,22 +290,26 @@ if __name__ == '__main__':
         sport_client.Init()
     
     # record + headless mode
+    # Recording runs at recording_frequency (default 30Hz) while control runs at frequency (default 60Hz)
+    recording_frame_accumulator = 0.0  # For sub-sampling
     if args.record and args.headless:
         # Use HDF5 writer for msc_humanoid_visual compatibility
         recorder = EpisodeWriterHDF5(
             save_dir=args.task_dir + args.task_name,
             robot_name=args.arm,
-            fps=args.frequency
+            fps=args.recording_frequency
         )
         logger_mp.info(f"HDF5 Episode recorder initialized (headless mode)")
+        logger_mp.info(f"  Control at {args.frequency}Hz, recording at {args.recording_frequency}Hz")
     elif args.record and not args.headless:
         # Use HDF5 writer for msc_humanoid_visual compatibility
         recorder = EpisodeWriterHDF5(
             save_dir=args.task_dir + args.task_name,
             robot_name=args.arm,
-            fps=args.frequency
+            fps=args.recording_frequency
         )
         logger_mp.info(f"HDF5 Episode recorder initialized")
+        logger_mp.info(f"  Control at {args.frequency}Hz, recording at {args.recording_frequency}Hz")
         
     try:
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
@@ -333,8 +338,9 @@ if __name__ == '__main__':
                 should_toggle_recording = False
                 if not is_recording:
                     recorder.start_recording()
+                    recording_frame_accumulator = 0.0  # Reset accumulator for new recording
                     is_recording = True
-                    logger_mp.info("==> Recording started")
+                    logger_mp.info(f"==> Recording started (at {args.recording_frequency}Hz)")
                 else:
                     recorder.stop_recording()
                     is_recording = False
@@ -386,54 +392,63 @@ if __name__ == '__main__':
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
-            # record data
+            # record data (sub-sampled to recording_frequency)
+            # Control runs at args.frequency (e.g., 60Hz), recording at args.recording_frequency (e.g., 30Hz)
             if args.record and is_recording:
-                # Get hand state and actions
-                if args.ee == "dex3" and args.xr_mode == "hand":
-                    with dual_hand_data_lock:
-                        hand_state = np.array(dual_hand_state_array[:])  # [14] - left+right
-                        hand_action = np.array(dual_hand_action_array[:])
-                elif args.ee == "dex1":
-                    with dual_gripper_data_lock:
-                        hand_state = np.array(dual_gripper_state_array[:])  # [2] - left+right
-                        hand_action = np.array(dual_gripper_action_array[:])
-                elif (args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
-                    with dual_hand_data_lock:
-                        hand_state = np.array(dual_hand_state_array[:])  # [12] - left+right
-                        hand_action = np.array(dual_hand_action_array[:])
-                else:
-                    hand_state = np.array([])
-                    hand_action = np.array([])
+                # Accumulate frames based on recording rate ratio
+                # e.g., 30Hz recording / 60Hz control = 0.5, so record every 2nd control frame
+                frame_increment = args.recording_frequency / args.frequency
+                recording_frame_accumulator += frame_increment
                 
-                # Combine arm and hand states into full qpos/qvel/action
-                full_qpos = np.concatenate([current_lr_arm_q, hand_state])
-                full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
-                full_action = np.concatenate([sol_q, hand_action])
-                
-                # Prepare camera images in msc_humanoid_visual format
-                images = {}
-                current_tv_image = tv_img_array.copy()
-                
-                if BINOCULAR:
-                    # Split binocular image into left and right
-                    images["ego_cam"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
-                    # Could also save right eye as separate camera if needed
-                else:
-                    images["ego_cam"] = current_tv_image
-                
-                # Add wrist cameras if available
-                if WRIST:
-                    current_wrist_image = wrist_img_array.copy()
-                    images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                    images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:]
-                
-                # Add timestep to HDF5 episode
-                recorder.add_timestep(
-                    qpos=full_qpos,
-                    qvel=full_qvel,
-                    action=full_action,
-                    images=images
-                )
+                if recording_frame_accumulator >= 1.0:
+                    recording_frame_accumulator -= 1.0
+                    
+                    # Get hand state and actions
+                    if args.ee == "dex3" and args.xr_mode == "hand":
+                        with dual_hand_data_lock:
+                            hand_state = np.array(dual_hand_state_array[:])  # [14] - left+right
+                            hand_action = np.array(dual_hand_action_array[:])
+                    elif args.ee == "dex1":
+                        with dual_gripper_data_lock:
+                            hand_state = np.array(dual_gripper_state_array[:])  # [2] - left+right
+                            hand_action = np.array(dual_gripper_action_array[:])
+                    elif (args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
+                        with dual_hand_data_lock:
+                            hand_state = np.array(dual_hand_state_array[:])  # [12] - left+right
+                            hand_action = np.array(dual_hand_action_array[:])
+                    else:
+                        hand_state = np.array([])
+                        hand_action = np.array([])
+                    
+                    # Combine arm and hand states into full qpos/qvel/action
+                    full_qpos = np.concatenate([current_lr_arm_q, hand_state])
+                    full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
+                    full_action = np.concatenate([sol_q, hand_action])
+                    
+                    # Prepare camera images in msc_humanoid_visual format
+                    images = {}
+                    current_tv_image = tv_img_array.copy()
+                    
+                    if BINOCULAR:
+                        # Split binocular image into left and right
+                        images["ego_cam"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
+                        # Could also save right eye as separate camera if needed
+                    else:
+                        images["ego_cam"] = current_tv_image
+                    
+                    # Add wrist cameras if available
+                    if WRIST:
+                        current_wrist_image = wrist_img_array.copy()
+                        images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2]
+                        images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                    
+                    # Add timestep to HDF5 episode
+                    recorder.add_timestep(
+                        qpos=full_qpos,
+                        qvel=full_qvel,
+                        action=full_action,
+                        images=images
+                    )
 
             current_time = time.time()
             time_elapsed = current_time - start_time
