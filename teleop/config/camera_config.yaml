@@ -1,0 +1,26 @@
+# Multi-Camera Configuration
+# Map camera names to RealSense serial numbers
+#
+# To find serial numbers, run:
+#   python3 teleop/scripts/detect_cameras.py
+
+cameras:
+  # Palm-mounted RealSense cameras (D435i)
+  palm_left: "337322073311"   # Intel RealSense D435I
+  palm_right: "337122075822"  # Intel RealSense D435I
+
+# Camera settings
+settings:
+  fps: 30          # Frames per second
+  width: 640       # Frame width
+  height: 480      # Frame height
+
+# ZED cameras - to be configured later
+# zed_cameras:
+#   stage_center: "REPLACE_WITH_ZED_SERIAL"
+#   stage_left: "REPLACE_WITH_ZED_SERIAL"
+#   stage_right: "REPLACE_WITH_ZED_SERIAL"
+# 
+# zed_settings:
+#   fps: 30
+#   resolution: "HD720"  # Options: HD2K, HD1080, HD720, VGA
