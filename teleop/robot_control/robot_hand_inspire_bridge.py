@@ -240,15 +240,15 @@ class Inspire_Bridge_Controller:
             try:
                 # Read left hand state
                 left_msg = self.LeftHandState_subscriber.Read()
-                if left_msg is not None and hasattr(left_msg, 'angle_cur'):
-                    for idx in range(min(Inspire_Num_Motors, len(left_msg.angle_cur))):
-                        self.left_hand_state_array[idx] = left_msg.angle_cur[idx]
+                if left_msg is not None and hasattr(left_msg, 'angle_act'):
+                    for idx in range(min(Inspire_Num_Motors, len(left_msg.angle_act))):
+                        self.left_hand_state_array[idx] = left_msg.angle_act[idx]
                 
                 # Read right hand state
                 right_msg = self.RightHandState_subscriber.Read()
-                if right_msg is not None and hasattr(right_msg, 'angle_cur'):
-                    for idx in range(min(Inspire_Num_Motors, len(right_msg.angle_cur))):
-                        self.right_hand_state_array[idx] = right_msg.angle_cur[idx]
+                if right_msg is not None and hasattr(right_msg, 'angle_act'):
+                    for idx in range(min(Inspire_Num_Motors, len(right_msg.angle_act))):
+                        self.right_hand_state_array[idx] = right_msg.angle_act[idx]
                         
             except Exception as e:
                 logger_mp.debug(f"Hand state read error: {e}")
