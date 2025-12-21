@@ -1,0 +1,37 @@
+#!/usr/bin/expect -f
+
+# Never time out
+set timeout -1
+
+# SSH password
+set password "Unitree0408"
+
+# Start SSH, auto-accept host key if first time
+spawn ssh -o StrictHostKeyChecking=no unitree@192.168.123.163
+
+# 1) Handle password prompt
+expect {
+    -re "[Pp]assword:" {
+        send "$password\r"
+    }
+}
+
+# 2) After login, handle ROS prompt and/or wait for shell prompt
+expect {
+    # ROS version selection
+    "ros:foxy(1) noetic(2) ?" {
+        send "1\r"
+        exp_continue
+    }
+
+    # Once we see a line ending with "$ " we assume it's the shell prompt
+    -re {\$ $} {
+        # reached shell, continue below
+    }
+}
+
+# 3) Run the image server on the robot
+send "cd image_server && python3 image_server.py\r"
+
+# 4) Hand control back to you
+interact
