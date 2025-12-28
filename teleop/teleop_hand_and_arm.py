@@ -34,13 +34,114 @@ def publish_reset_category(category: int,publisher): # Scene Reset signal
     publisher.Write(msg)
     logger_mp.info(f"published reset category: {category}")
 
+# ============================================================================
+# RESET POSE CONFIGURATION
+# Robot-specific reset poses (arms forward at chest height)
+# These are 4x4 SE3 transformation matrices for wrist targets
+# ============================================================================
+
+# Pose matching threshold: 15 degrees in radians for each arm joint
+POSE_MATCH_THRESHOLD_RAD = np.deg2rad(15)  # ~0.262 radians
+
+def get_reset_wrist_poses(robot_type):
+    """
+    Get the reset wrist poses (SE3 matrices) for a given robot type.
+    Arms forward at chest height, palms facing down/inward.
+    
+    Returns: (left_wrist_pose, right_wrist_pose) as 4x4 numpy arrays
+    """
+    if robot_type == "G1_29":
+        # G1_29: Arms forward at chest height
+        left_pose = np.array([
+            [1, 0, 0, 0.30],   # Forward 30cm
+            [0, 1, 0, 0.25],   # Left 25cm from center
+            [0, 0, 1, 0.05],   # Slightly above waist
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+        right_pose = np.array([
+            [1, 0, 0, 0.30],   # Forward 30cm
+            [0, 1, 0, -0.25],  # Right 25cm from center
+            [0, 0, 1, 0.05],   # Slightly above waist
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+    elif robot_type == "G1_23":
+        # G1_23: Similar but adjusted for different arm config
+        left_pose = np.array([
+            [1, 0, 0, 0.30],
+            [0, 1, 0, 0.25],
+            [0, 0, 1, 0.05],
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+        right_pose = np.array([
+            [1, 0, 0, 0.30],
+            [0, 1, 0, -0.25],
+            [0, 0, 1, 0.05],
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+    elif robot_type == "H1_2":
+        # H1_2: Taller robot, arms forward at chest height
+        # H1_2 uses scale_arms internally (human_arm_length=0.60, robot_arm_length=0.75)
+        # So we specify poses in human scale, they get scaled up
+        left_pose = np.array([
+            [1, 0, 0, 0.25],   # Forward (will be scaled)
+            [0, 1, 0, 0.25],   # Left
+            [0, 0, 1, 0.10],   # Chest height
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+        right_pose = np.array([
+            [1, 0, 0, 0.25],
+            [0, 1, 0, -0.25],
+            [0, 0, 1, 0.10],
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+    elif robot_type == "H1":
+        # H1: Simpler arm configuration
+        left_pose = np.array([
+            [1, 0, 0, 0.25],
+            [0, 1, 0, 0.25],
+            [0, 0, 1, 0.10],
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+        right_pose = np.array([
+            [1, 0, 0, 0.25],
+            [0, 1, 0, -0.25],
+            [0, 0, 1, 0.10],
+            [0, 0, 0, 1]
+        ], dtype=np.float64)
+    else:
+        raise ValueError(f"Unknown robot type: {robot_type}")
+    
+    return left_pose, right_pose
+
+def check_arm_pose_match(user_arm_q, reset_arm_q, threshold_rad):
+    """
+    Check if all arm joints are within threshold.
+    Only compares arm joints, ignores hand/finger joints.
+    
+    Args:
+        user_arm_q: Current IK solution from user tracking (arm joints only)
+        reset_arm_q: IK solution for reset pose (arm joints only)
+        threshold_rad: Maximum allowed difference per joint in radians
+    
+    Returns:
+        (is_matched, max_diff_deg): Tuple of match status and max difference in degrees
+    """
+    diff = np.abs(user_arm_q - reset_arm_q)
+    max_diff_rad = np.max(diff)
+    max_diff_deg = np.rad2deg(max_diff_rad)
+    is_matched = np.all(diff < threshold_rad)
+    return is_matched, max_diff_deg
+
 # state transition
 start_signal = False
 running = True
 should_toggle_recording = False
 is_recording = False
+is_paused = False  # Paused state between episodes (robot at reset pose, waiting for user)
+should_force_resume = False  # Manual override to force resume tracking
+
 def on_press(key):
-    global running, start_signal, should_toggle_recording
+    global running, start_signal, should_toggle_recording, should_force_resume
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
@@ -52,6 +153,9 @@ def on_press(key):
         running = False
     elif key == 's' and start_signal == True:
         should_toggle_recording = True
+    elif key == 'c' and start_signal == True:
+        should_force_resume = True
+        logger_mp.info("Force resume signal received (key 'c')")
     else:
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
 listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
@@ -185,6 +289,14 @@ if __name__ == '__main__':
     elif args.arm == "H1":
         arm_ik = H1_ArmIK()
         arm_ctrl = H1_ArmController(simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
+
+    # Get reset pose for this robot type (arms forward at chest height)
+    reset_left_wrist_pose, reset_right_wrist_pose = get_reset_wrist_poses(args.arm)
+    logger_mp.info(f"Reset pose initialized for {args.arm}")
+    
+    # Pre-compute the reset pose IK solution (will be updated when entering pause)
+    reset_arm_q = None  # Will be computed when entering paused state
+    pause_pose_match_logged = False  # To avoid spamming logs
 
     # end-effector
     if args.ee == "dex3":
@@ -325,6 +437,9 @@ if __name__ == '__main__':
                         publish_reset_category(2, reset_pose_publisher)
                 elif key == ord('s'):
                     should_toggle_recording = True
+                elif key == ord('c'):
+                    should_force_resume = True
+                    logger_mp.info("Force resume signal received (key 'c' in window)")
                 elif key == ord('a'):
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
@@ -341,6 +456,27 @@ if __name__ == '__main__':
                     logger_mp.info("==> Recording stopped and saved")
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
+                    # Enter paused state - robot will go to reset pose
+                    is_paused = True
+                    pause_pose_match_logged = False
+                    # Compute reset pose IK solution using current arm state as seed
+                    current_lr_arm_q_for_reset = arm_ctrl.get_current_dual_arm_q()
+                    reset_arm_q, _ = arm_ik.solve_ik(reset_left_wrist_pose, reset_right_wrist_pose, 
+                                                     current_lr_arm_q_for_reset, None)
+                    logger_mp.info("=" * 60)
+                    logger_mp.info("PAUSED: Robot moving to reset pose (arms forward)")
+                    logger_mp.info("Match the pose to resume tracking, or press 'c' to force resume")
+                    logger_mp.info("=" * 60)
+            
+            # Handle force resume
+            if should_force_resume:
+                should_force_resume = False
+                if is_paused:
+                    is_paused = False
+                    logger_mp.info("=" * 60)
+                    logger_mp.info("RESUMED: Tracking reactivated via manual override ('c' key)")
+                    logger_mp.info("=" * 60)
+            
             # get input data
             tele_data = tv_wrapper.get_motion_state_data()
             if (args.ee == "dex3" or args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
@@ -379,12 +515,38 @@ if __name__ == '__main__':
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
-            # solve ik using motor data and wrist pose, then use ik results to control arms.
-            time_ik_start = time.time()
-            sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
-            time_ik_end = time.time()
-            logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
-            arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+            if is_paused:
+                # PAUSED STATE: Robot holds reset pose, waits for user to match
+                # Command robot to stay at reset pose
+                sol_q = reset_arm_q
+                sol_tauff = np.zeros_like(reset_arm_q)  # No torque feedforward when holding
+                arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+                
+                # Compute what the user's IK solution would be (to check if they match reset pose)
+                user_sol_q, _ = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, 
+                                                 current_lr_arm_q, current_lr_arm_dq)
+                
+                # Check if user pose matches reset pose
+                pose_matched, max_diff_deg = check_arm_pose_match(user_sol_q, reset_arm_q, POSE_MATCH_THRESHOLD_RAD)
+                
+                if pose_matched:
+                    is_paused = False
+                    logger_mp.info("=" * 60)
+                    logger_mp.info("RESUMED: User pose matched reset pose!")
+                    logger_mp.info("Tracking reactivated - ready for next episode")
+                    logger_mp.info("=" * 60)
+                else:
+                    # Log pose mismatch periodically (not every frame)
+                    if not pause_pose_match_logged or int(time.time()) % 3 == 0:
+                        logger_mp.info(f"[PAUSED] Waiting for pose match... max joint diff: {max_diff_deg:.1f}° (need < 15°)")
+                        pause_pose_match_logged = True
+            else:
+                # NORMAL TRACKING: solve ik using motor data and wrist pose
+                time_ik_start = time.time()
+                sol_q, sol_tauff = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
+                time_ik_end = time.time()
+                logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
+                arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
             # record data
             if args.record and is_recording:
