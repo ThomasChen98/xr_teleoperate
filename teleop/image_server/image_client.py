@@ -53,6 +53,12 @@ class ImageClient:
         self._enable_performance_eval = Unit_Test
         if self._enable_performance_eval:
             self._init_performance_metrics()
+        
+        # Queue monitoring for latency debugging
+        self._queue_monitor_enabled = True
+        self._queue_check_interval = 300  # Check every N frames
+        self._queue_frame_counter = 0
+        self._queue_depth_history = deque(maxlen=10)  # Track recent queue depths
 
     def _init_performance_metrics(self):
         self._frame_count = 0  # Total frames received
@@ -116,6 +122,79 @@ class ImageClient:
             logger_mp.info(f"[Image Client] Real-time FPS: {real_time_fps:.2f}, Avg Latency: {avg_latency*1000:.2f} ms, Max Latency: {max_latency*1000:.2f} ms, \
                   Min Latency: {min_latency*1000:.2f} ms, Jitter: {jitter*1000:.2f} ms, Lost Frame Rate: {lost_frame_rate:.2f}%")
     
+    def _process_message(self, message, receive_time):
+        """Process a single received message (extracted for reuse)"""
+        if self._enable_performance_eval:
+            header_size = struct.calcsize('dI')
+            try:
+                header = message[:header_size]
+                jpg_bytes = message[header_size:]
+                timestamp, frame_id = struct.unpack('dI', header)
+            except struct.error as e:
+                logger_mp.warning(f"[Image Client] Error unpacking header: {e}, discarding message.")
+                return
+        else:
+            jpg_bytes = message
+            timestamp, frame_id = None, None
+        
+        # Decode image
+        np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
+        current_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+        if current_image is None:
+            logger_mp.warning("[Image Client] Failed to decode image.")
+            return
+
+        if self.tv_enable_shm:
+            np.copyto(self.tv_img_array, np.array(current_image[:, :self.tv_img_shape[1]]))
+        
+        if self.wrist_enable_shm:
+            np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1]:]))
+        
+        if self._image_show:
+            height, width = current_image.shape[:2]
+            resized_image = cv2.resize(current_image, (width // 2, height // 2))
+            cv2.imshow('Image Client Stream', resized_image)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                self.running = False
+
+        if self._enable_performance_eval and timestamp is not None:
+            self._update_performance_metrics(timestamp, frame_id, receive_time)
+            self._print_performance_metrics(receive_time)
+
+    def _check_zmq_queue_depth(self):
+        """
+        Check ZMQ queue depth by counting pending messages using non-blocking recv.
+        This helps diagnose latency buildup issues.
+        """
+        queue_depth = 0
+        pending_messages = []
+        
+        # Use non-blocking recv to drain and count all pending messages
+        while True:
+            try:
+                msg = self._socket.recv(zmq.NOBLOCK)
+                queue_depth += 1
+                pending_messages.append(msg)
+            except zmq.Again:
+                # No more messages in queue
+                break
+        
+        self._queue_depth_history.append(queue_depth)
+        avg_depth = sum(self._queue_depth_history) / len(self._queue_depth_history)
+        
+        if queue_depth > 0:
+            logger_mp.warning(f"[ZMQ Queue Monitor] Queue depth: {queue_depth} messages pending, "
+                            f"avg over last {len(self._queue_depth_history)} checks: {avg_depth:.1f}")
+            if queue_depth > 10:
+                logger_mp.error(f"[ZMQ Queue Monitor] ⚠️  HIGH QUEUE DEPTH DETECTED! "
+                              f"This will cause increasing latency over time. "
+                              f"Consider enabling ZMQ_CONFLATE to fix.")
+        else:
+            logger_mp.debug(f"[ZMQ Queue Monitor] Queue depth: 0 (healthy)")
+        
+        # Return the pending messages so they can still be processed
+        return pending_messages
+    
     def _close(self):
         self._socket.close()
         self._context.term()
@@ -134,46 +213,20 @@ class ImageClient:
         logger_mp.info("Image client has started, waiting to receive data...")
         try:
             while self.running:
+                # Periodically check ZMQ queue depth for latency debugging
+                self._queue_frame_counter += 1
+                if self._queue_monitor_enabled and self._queue_frame_counter % self._queue_check_interval == 0:
+                    pending_msgs = self._check_zmq_queue_depth()
+                    # Process any pending messages that were drained during the check
+                    for msg in pending_msgs:
+                        self._process_message(msg, time.time())
+                
                 # Receive message
                 message = self._socket.recv()
                 receive_time = time.time()
-
-                if self._enable_performance_eval:
-                    header_size = struct.calcsize('dI')
-                    try:
-                        # Attempt to extract header and image data
-                        header = message[:header_size]
-                        jpg_bytes = message[header_size:]
-                        timestamp, frame_id = struct.unpack('dI', header)
-                    except struct.error as e:
-                        logger_mp.warning(f"[Image Client] Error unpacking header: {e}, discarding message.")
-                        continue
-                else:
-                    # No header, entire message is image data
-                    jpg_bytes = message
-                # Decode image
-                np_img = np.frombuffer(jpg_bytes, dtype=np.uint8)
-                current_image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-                if current_image is None:
-                    logger_mp.warning("[Image Client] Failed to decode image.")
-                    continue
-
-                if self.tv_enable_shm:
-                    np.copyto(self.tv_img_array, np.array(current_image[:, :self.tv_img_shape[1]]))
                 
-                if self.wrist_enable_shm:
-                    np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1]:]))
-                
-                if self._image_show:
-                    height, width = current_image.shape[:2]
-                    resized_image = cv2.resize(current_image, (width // 2, height // 2))
-                    cv2.imshow('Image Client Stream', resized_image)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        self.running = False
-
-                if self._enable_performance_eval:
-                    self._update_performance_metrics(timestamp, frame_id, receive_time)
-                    self._print_performance_metrics(receive_time)
+                # Process the received message
+                self._process_message(message, receive_time)
 
         except KeyboardInterrupt:
             logger_mp.info("Image client interrupted by user.")

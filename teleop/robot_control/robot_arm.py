@@ -2,7 +2,6 @@ import numpy as np
 import threading
 import time
 from enum import IntEnum
-from tqdm import tqdm
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize # dds
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import ( LowCmd_  as hg_LowCmd, LowState_ as hg_LowState) # idl for g1, h1_2
@@ -104,11 +103,9 @@ class G1_29_ArmController:
         self.subscribe_thread.daemon = True
         self.subscribe_thread.start()
 
-        # Wait for DDS connection with progress bar
-        with tqdm(desc="[G1_29] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-            while not self.lowstate_buffer.GetData():
-                time.sleep(0.1)
-                pbar.update(1)
+        while not self.lowstate_buffer.GetData():
+            time.sleep(0.1)
+            logger_mp.warning("[G1_29_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[G1_29_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
@@ -397,11 +394,9 @@ class G1_23_ArmController:
         self.subscribe_thread.daemon = True
         self.subscribe_thread.start()
 
-        # Wait for DDS connection with progress bar
-        with tqdm(desc="[G1_23] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-            while not self.lowstate_buffer.GetData():
-                time.sleep(0.1)
-                pbar.update(1)
+        while not self.lowstate_buffer.GetData():
+            time.sleep(0.1)
+            logger_mp.warning("[G1_23_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[G1_23_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
@@ -677,11 +672,9 @@ class H1_2_ArmController:
         self.subscribe_thread.daemon = True
         self.subscribe_thread.start()
 
-        # Wait for DDS connection with progress bar
-        with tqdm(desc="[H1_2] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-            while not self.lowstate_buffer.GetData():
-                time.sleep(0.1)
-                pbar.update(1)
+        while not self.lowstate_buffer.GetData():
+            time.sleep(0.1)
+            logger_mp.warning("[H1_2_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[H1_2_ArmController] Subscribe dds ok.")
 
         # initialize hg's lowcmd msg
@@ -955,11 +948,9 @@ class H1_ArmController:
         self.subscribe_thread.daemon = True
         self.subscribe_thread.start()
 
-        # Wait for DDS connection with progress bar
-        with tqdm(desc="[H1] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-            while not self.lowstate_buffer.GetData():
-                time.sleep(0.1)
-                pbar.update(1)
+        while not self.lowstate_buffer.GetData():
+            time.sleep(0.1)
+            logger_mp.warning("[H1_ArmController] Waiting to subscribe dds...")
         logger_mp.info("[H1_ArmController] Subscribe dds ok.")
 
         # initialize h1's lowcmd msg
