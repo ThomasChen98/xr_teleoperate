@@ -139,9 +139,10 @@ should_toggle_recording = False
 is_recording = False
 is_paused = False  # Paused state between episodes (robot at reset pose, waiting for user)
 should_force_resume = False  # Manual override to force resume tracking
+should_reconnect_hands = False  # Request to reconnect inspire hands
 
 def on_press(key):
-    global running, start_signal, should_toggle_recording, should_force_resume
+    global running, start_signal, should_toggle_recording, should_force_resume, should_reconnect_hands
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
@@ -156,6 +157,9 @@ def on_press(key):
     elif key == 'c' and start_signal == True:
         should_force_resume = True
         logger_mp.info("Force resume signal received (key 'c')")
+    elif key == 'h' and start_signal == True:
+        should_reconnect_hands = True
+        logger_mp.info("Hand reconnect signal received (key 'h')")
     else:
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
 listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
@@ -440,6 +444,9 @@ if __name__ == '__main__':
                 elif key == ord('c'):
                     should_force_resume = True
                     logger_mp.info("Force resume signal received (key 'c' in window)")
+                elif key == ord('h'):
+                    should_reconnect_hands = True
+                    logger_mp.info("Hand reconnect signal received (key 'h' in window)")
                 elif key == ord('a'):
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
@@ -476,6 +483,19 @@ if __name__ == '__main__':
                     logger_mp.info("=" * 60)
                     logger_mp.info("RESUMED: Tracking reactivated via manual override ('c' key)")
                     logger_mp.info("=" * 60)
+            
+            # Handle hand reconnect request
+            if should_reconnect_hands:
+                should_reconnect_hands = False
+                if args.ee == "inspire1" and args.inspire_bridge:
+                    if hasattr(hand_ctrl, 'request_reconnect'):
+                        success_left, success_right = hand_ctrl.request_reconnect()
+                        status = hand_ctrl.get_connection_status()
+                        logger_mp.info(f"Hand connection status - Left: {status['left']}, Right: {status['right']}")
+                    else:
+                        logger_mp.warning("Hand controller doesn't support reconnect (missing request_reconnect method)")
+                else:
+                    logger_mp.info("Hand reconnect only available for inspire bridge mode (--inspire-bridge flag)")
             
             # get input data
             tele_data = tv_wrapper.get_motion_state_data()
