@@ -40,8 +40,8 @@ def publish_reset_category(category: int,publisher): # Scene Reset signal
 # These are 4x4 SE3 transformation matrices for wrist targets
 # ============================================================================
 
-# Pose matching threshold: 15 degrees in radians for each arm joint
-POSE_MATCH_THRESHOLD_RAD = np.deg2rad(15)  # ~0.262 radians
+# Pose matching threshold: 30 degrees in radians for each arm joint
+POSE_MATCH_THRESHOLD_RAD = np.deg2rad(30)  # ~0.524 radians
 
 def get_reset_wrist_poses(robot_type):
     """
