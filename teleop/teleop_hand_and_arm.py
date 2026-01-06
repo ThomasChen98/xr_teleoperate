@@ -189,6 +189,9 @@ if __name__ == '__main__':
     parser.add_argument('--network-interface', type=str, default='eno1', help='Network interface for hand bridge (e.g., eno1, eth0, wlan0)')
     parser.add_argument('--left-hand-ip', type=str, default='192.168.123.211', help='IP address of left Inspire hand')
     parser.add_argument('--right-hand-ip', type=str, default='192.168.123.210', help='IP address of right Inspire hand')
+    
+    # debug flags
+    parser.add_argument('--debug', action='store_true', help='Enable debug output for locomotion and other data')
 
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
@@ -577,6 +580,16 @@ if __name__ == '__main__':
                 logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
                 arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
+            # Debug locomotion state (works even when not recording)
+            if args.debug and args.motion and loco_state_subscriber is not None and not is_recording:
+                loco_msg = loco_state_subscriber.Read()
+                if loco_msg is not None:
+                    logger_mp.info(f"[LOCO DEBUG] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}) "
+                                  f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}) "
+                                  f"yaw={loco_msg.imu_state.rpy[2]:.2f} height={loco_msg.body_height:.3f}")
+                else:
+                    logger_mp.warning("[LOCO DEBUG] No locomotion state received from rt/sportmodestate!")
+
             # record data
             if args.record and is_recording:
                 # Get hand state and actions
@@ -607,6 +620,13 @@ if __name__ == '__main__':
                 if args.motion and loco_state_subscriber is not None:
                     loco_msg = loco_state_subscriber.Read()
                     if loco_msg is not None:
+                        # Debug output for locomotion data
+                        if args.debug:
+                            logger_mp.info(f"[LOCO] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}, {loco_msg.position[2]:.2f}) "
+                                          f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}, {loco_msg.velocity[2]:.2f}) "
+                                          f"height={loco_msg.body_height:.3f} yaw_rate={loco_msg.yaw_speed:.2f} "
+                                          f"rpy=({loco_msg.imu_state.rpy[0]:.2f}, {loco_msg.imu_state.rpy[1]:.2f}, {loco_msg.imu_state.rpy[2]:.2f})")
+                        
                         # loco_state: [11] - position(3), velocity(3), body_height, yaw_speed, rpy(3)
                         loco_state = np.array([
                             loco_msg.position[0],           # x
@@ -630,6 +650,8 @@ if __name__ == '__main__':
                             loco_msg.yaw_speed,             # omega command
                             loco_msg.body_height,           # height command
                         ], dtype=np.float32)
+                    elif args.debug:
+                        logger_mp.warning("[LOCO] No locomotion state message received!")
                 
                 # Prepare camera images in msc_humanoid_visual format
                 images = {}
