@@ -4,6 +4,7 @@ import argparse
 import cv2
 from multiprocessing import shared_memory, Value, Array, Lock
 import threading
+import concurrent.futures
 import logging_mp
 logging_mp.basic_config(level=logging_mp.INFO)
 logger_mp = logging_mp.get_logger(__name__)
@@ -420,13 +421,22 @@ if __name__ == '__main__':
         loco_state_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
         loco_state_subscriber.Init()
         
-        # Wait for first SportModeState message to ensure DDS discovery is complete
+        # Wait for first SportModeState message with proper timeout
+        # Note: Read() may block indefinitely if topic has no publishers, so use ThreadPoolExecutor
         logger_mp.info("Waiting for SportModeState subscription (rt/sportmodestate)...")
-        wait_start = time.time()
+        
+        def try_read_loco():
+            """Attempt to read from subscriber - may block"""
+            return loco_state_subscriber.Read()
+        
         first_msg = None
-        while first_msg is None and (time.time() - wait_start) < 5.0:
-            first_msg = loco_state_subscriber.Read()
-            time.sleep(0.01)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(try_read_loco)
+            try:
+                first_msg = future.result(timeout=5.0)
+            except concurrent.futures.TimeoutError:
+                first_msg = None
+                logger_mp.debug("[LOCO] Read() timed out after 5s")
         
         if first_msg is None:
             logger_mp.warning("[WARNING] No SportModeState received after 5s - loco data will NOT be recorded!")
