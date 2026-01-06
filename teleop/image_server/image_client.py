@@ -224,8 +224,16 @@ class ImageClient:
         self._socket.setsockopt(zmq.RCVTIMEO, 500)  # 500ms timeout
 
         logger_mp.info("Image client has started, waiting to receive data...")
+        _loop_count = 0
+        _last_log_time = time.time()
         try:
             while self.running:
+                _loop_count += 1
+                # Log every 5 seconds to confirm thread is alive
+                if time.time() - _last_log_time > 5.0:
+                    logger_mp.info(f"[IMG THREAD] Still running: loop={_loop_count}, running={self.running}")
+                    _last_log_time = time.time()
+                
                 # Periodically check ZMQ queue depth for latency debugging
                 self._queue_frame_counter += 1
                 if self._queue_monitor_enabled and self._queue_frame_counter % self._queue_check_interval == 0:
@@ -251,6 +259,7 @@ class ImageClient:
             if self.running:  # Only log if not intentionally stopped
                 logger_mp.warning(f"[Image Client] An error occurred while receiving data: {e}")
         finally:
+            logger_mp.info(f"[IMG THREAD] Exited: running={self.running}, loop_count={_loop_count}")
             self._close()
 
 if __name__ == "__main__":

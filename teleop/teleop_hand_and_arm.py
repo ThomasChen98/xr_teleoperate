@@ -264,22 +264,9 @@ if __name__ == '__main__':
     else:
         img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
 
-    image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
-    image_receive_thread.daemon = True
-    image_receive_thread.start()
-
-    # Wait for first image to arrive before creating TeleVuerWrapper
-    # This prevents TeleVuerWrapper from caching a black/zero image on startup
-    logger_mp.info("Waiting for first camera frame...")
-    max_wait = 5.0
-    start_wait = time.time()
-    while tv_img_array.max() == 0 and (time.time() - start_wait) < max_wait:
-        time.sleep(0.1)
-    
-    if tv_img_array.max() == 0:
-        logger_mp.warning("⚠️  No image received after 5s - camera may not be streaming!")
-    else:
-        logger_mp.info(f"✓ First image received (mean={tv_img_array.mean():.1f})")
+    # NOTE: Image receive thread will be started AFTER all subprocess-spawning components
+    # are initialized (TeleVuerWrapper spawns a process, and ZMQ is not fork-safe)
+    image_receive_thread = None  # Will be created later
 
     # Initialize DDS with network interface if using inspire bridge mode
     # This MUST be done before creating arm controller to ensure correct network interface
@@ -469,6 +456,25 @@ if __name__ == '__main__':
         )
         logger_mp.info(f"HDF5 Episode recorder initialized")
         
+    # Start image receive thread AFTER all subprocess-spawning components are initialized
+    # This is critical because TeleVuerWrapper spawns a process, and ZMQ contexts
+    # are not fork-safe - starting the thread before the fork corrupts the ZMQ socket
+    logger_mp.info("Starting image receive thread (after all subprocess init)...")
+    image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
+    image_receive_thread.start()
+    
+    # Wait for first image to arrive
+    logger_mp.info("Waiting for first camera frame...")
+    max_wait = 5.0
+    start_wait = time.time()
+    while tv_img_array.max() == 0 and (time.time() - start_wait) < max_wait:
+        time.sleep(0.1)
+    
+    if tv_img_array.max() == 0:
+        logger_mp.warning("⚠️  No image received after 5s - camera may not be streaming!")
+    else:
+        logger_mp.info(f"✓ First image received (mean={tv_img_array.mean():.1f})")
+    
     try:
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
         while not start_signal:
@@ -749,7 +755,8 @@ if __name__ == '__main__':
         logger_mp.info("[CLEANUP] Stopping image client...")
         img_client.running = False
         try:
-            image_receive_thread.join(timeout=1)
+            if image_receive_thread is not None:
+                image_receive_thread.join(timeout=1)
         except Exception as e:
             logger_mp.debug(f"[CLEANUP] Image thread join: {e}")
         
