@@ -10,7 +10,7 @@ logger_mp = logging_mp.get_logger(__name__)
 
 class ImageClient:
     def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None, 
-                       image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False):
+                       image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False, debug = False):
         """
         tv_img_shape: User's expected head camera resolution shape (H, W, C). It should match the output of the image service terminal.
 
@@ -28,9 +28,12 @@ class ImageClient:
 
         Unit_Test: When both server and client are True, it can be used to test the image transfer latency, \
                    network jitter, frame loss rate and other information.
+        
+        debug: Whether to output verbose debug logs for image streaming.
         """
         self.running = True
         self._image_show = image_show
+        self._debug = debug
         self._server_address = server_address
         self._port = port
 
@@ -153,7 +156,7 @@ class ImageClient:
                     self._shm_debug_count += 1
                 else:
                     self._shm_debug_count = 0
-                if self._shm_debug_count % 30 == 0:
+                if self._debug and self._shm_debug_count % 30 == 0:
                     logger_mp.info(f"[SHM DEBUG] Frame {self._shm_debug_count}: copied {src_data.shape}, mean={self.tv_img_array.mean():.1f}")
             except Exception as e:
                 logger_mp.error(f"[SHM ERROR] copyto failed: {e}, src={current_image.shape}, dst={self.tv_img_array.shape}")
@@ -229,8 +232,8 @@ class ImageClient:
         try:
             while self.running:
                 _loop_count += 1
-                # Log every 5 seconds to confirm thread is alive
-                if time.time() - _last_log_time > 5.0:
+                # Log every 5 seconds to confirm thread is alive (only in debug mode)
+                if self._debug and time.time() - _last_log_time > 5.0:
                     logger_mp.info(f"[IMG THREAD] Still running: loop={_loop_count}, running={self.running}")
                     _last_log_time = time.time()
                 
@@ -259,7 +262,8 @@ class ImageClient:
             if self.running:  # Only log if not intentionally stopped
                 logger_mp.warning(f"[Image Client] An error occurred while receiving data: {e}")
         finally:
-            logger_mp.info(f"[IMG THREAD] Exited: running={self.running}, loop_count={_loop_count}")
+            if self._debug:
+                logger_mp.info(f"[IMG THREAD] Exited: running={self.running}, loop_count={_loop_count}")
             self._close()
 
 if __name__ == "__main__":

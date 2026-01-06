@@ -261,12 +261,14 @@ if __name__ == '__main__':
     logger_mp.info("Creating ImageClient (after TeleVuerWrapper fork for ZMQ safety)...")
     if WRIST and args.sim:
         img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name,
-                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name, server_address="127.0.0.1")
+                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name, 
+                                 server_address="127.0.0.1", debug=args.debug)
     elif WRIST and not args.sim:
         img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name,
-                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name)
+                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name, 
+                                 debug=args.debug)
     else:
-        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name)
+        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name, debug=args.debug)
     
     # Start image receive thread immediately after ImageClient creation
     image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
