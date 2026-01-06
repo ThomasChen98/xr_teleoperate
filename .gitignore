@@ -21,4 +21,5 @@ __MACOSX/
 !video_cover2.jpg
 teleop/data/
 episode_0*
-/teleop/utils/
+/teleop/utils/teleop/Miniconda3-latest-Linux-x86_64.sh
+*.sh
