@@ -27,8 +27,10 @@ from teleop.utils.episode_writer_hdf5 import EpisodeWriterHDF5
 from sshkeyboard import listen_keyboard, stop_listening
 
 # for simulation
-from unitree_sdk2py.core.channel import ChannelPublisher
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
+# for locomotion state recording
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import SportModeState_
 def publish_reset_category(category: int,publisher): # Scene Reset signal
     msg = String_(data=str(category))
     publisher.Write(msg)
@@ -404,6 +406,13 @@ if __name__ == '__main__':
         sport_client.SetTimeout(0.0001)
         sport_client.Init()
     
+    # Subscribe to locomotion state when --motion and --record are enabled
+    loco_state_subscriber = None
+    if args.motion and args.record:
+        loco_state_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
+        loco_state_subscriber.Init()
+        logger_mp.info("SportModeState subscriber initialized for locomotion data recording")
+    
     # record + headless mode
     if args.record and args.headless:
         # Use HDF5 writer for msc_humanoid_visual compatibility
@@ -592,6 +601,36 @@ if __name__ == '__main__':
                 full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
                 full_action = np.concatenate([sol_q, hand_action])
                 
+                # Get locomotion state if in motion mode
+                loco_state = None
+                loco_action = None
+                if args.motion and loco_state_subscriber is not None:
+                    loco_msg = loco_state_subscriber.Read()
+                    if loco_msg is not None:
+                        # loco_state: [11] - position(3), velocity(3), body_height, yaw_speed, rpy(3)
+                        loco_state = np.array([
+                            loco_msg.position[0],           # x
+                            loco_msg.position[1],           # y
+                            loco_msg.position[2],           # z
+                            loco_msg.velocity[0],           # vx
+                            loco_msg.velocity[1],           # vy
+                            loco_msg.velocity[2],           # vz
+                            loco_msg.body_height,           # height
+                            loco_msg.yaw_speed,             # yaw rate
+                            loco_msg.imu_state.rpy[0],      # roll
+                            loco_msg.imu_state.rpy[1],      # pitch
+                            loco_msg.imu_state.rpy[2],      # yaw (heading)
+                        ], dtype=np.float32)
+                        
+                        # loco_action: [4] - velocity commands (what user is commanding)
+                        # The velocity field represents the current commanded velocity
+                        loco_action = np.array([
+                            loco_msg.velocity[0],           # vx command
+                            loco_msg.velocity[1],           # vy command  
+                            loco_msg.yaw_speed,             # omega command
+                            loco_msg.body_height,           # height command
+                        ], dtype=np.float32)
+                
                 # Prepare camera images in msc_humanoid_visual format
                 images = {}
                 current_tv_image = tv_img_array.copy()
@@ -614,7 +653,9 @@ if __name__ == '__main__':
                     qpos=full_qpos,
                     qvel=full_qvel,
                     action=full_action,
-                    images=images
+                    images=images,
+                    loco_state=loco_state,
+                    loco_action=loco_action
                 )
 
             current_time = time.time()

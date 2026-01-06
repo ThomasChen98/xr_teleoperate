@@ -8,17 +8,22 @@ File structure:
 /observations/
     qpos: [T, N_joints] - joint positions (arm + hand)
     qvel: [T, N_joints] - joint velocities
+    loco_state: [T, 11] - locomotion state (optional, when --motion enabled)
+        [x, y, z, vx, vy, vz, body_height, yaw_speed, roll, pitch, yaw]
     images/
         ego_cam: [T, H, W, 3] - RGB images
         cam_low: [T, H, W, 3]
         cam_left_wrist: [T, H, W, 3]
         cam_right_wrist: [T, H, W, 3]
 /action: [T, N_joints] - target joint positions
+/loco_action: [T, 4] - locomotion velocity commands (optional, when --motion enabled)
+    [vx, vy, omega, height]
 /metadata:
     episode_length: int
     fps: int
     robot_name: str
     timestamp: str
+    has_loco_data: bool
 """
 
 import h5py
@@ -59,6 +64,10 @@ class EpisodeWriterHDF5:
         self.action_buffer = []
         self.image_buffers = {}  # {camera_name: [frames]}
         
+        # Locomotion data buffers (for --motion mode)
+        self.loco_state_buffer = []   # [T, 11] - position, velocity, height, yaw_speed, rpy
+        self.loco_action_buffer = []  # [T, 4]  - vx, vy, omega, height_cmd
+        
         self.recording = False
         
         logger_mp.info(f"EpisodeWriterHDF5 initialized: {self.filepath}")
@@ -70,9 +79,11 @@ class EpisodeWriterHDF5:
         self.qvel_buffer = []
         self.action_buffer = []
         self.image_buffers = {}
+        self.loco_state_buffer = []
+        self.loco_action_buffer = []
         logger_mp.info(f"Started recording episode {self.episode_idx}")
     
-    def add_timestep(self, qpos, qvel, action, images=None):
+    def add_timestep(self, qpos, qvel, action, images=None, loco_state=None, loco_action=None):
         """
         Add a single timestep to the episode
         
@@ -81,6 +92,10 @@ class EpisodeWriterHDF5:
             qvel: Joint velocities array [N] (arm + hand joints)
             action: Target joint positions array [N] (arm + hand targets)
             images: Dict of {camera_name: image_array} where image is [H, W, 3] RGB uint8
+            loco_state: Locomotion state array [11] (optional, for --motion mode)
+                [x, y, z, vx, vy, vz, body_height, yaw_speed, roll, pitch, yaw]
+            loco_action: Locomotion action array [4] (optional, for --motion mode)
+                [vx_cmd, vy_cmd, omega_cmd, height_cmd]
         """
         if not self.recording:
             return
@@ -88,6 +103,12 @@ class EpisodeWriterHDF5:
         self.qpos_buffer.append(np.array(qpos, dtype=np.float32))
         self.qvel_buffer.append(np.array(qvel, dtype=np.float32))
         self.action_buffer.append(np.array(action, dtype=np.float32))
+        
+        # Store locomotion data if provided
+        if loco_state is not None:
+            self.loco_state_buffer.append(np.array(loco_state, dtype=np.float32))
+        if loco_action is not None:
+            self.loco_action_buffer.append(np.array(loco_action, dtype=np.float32))
         
         if images is not None:
             for camera_name, image in images.items():
@@ -120,10 +141,16 @@ class EpisodeWriterHDF5:
             
             episode_length = len(self.qpos_buffer)
             
+            # Check if we have locomotion data
+            has_loco_data = len(self.loco_state_buffer) > 0
+            
             logger_mp.info(f"Saving episode {self.episode_idx}: {episode_length} timesteps")
             logger_mp.info(f"  qpos buffer length: {len(self.qpos_buffer)}")
             logger_mp.info(f"  qvel buffer length: {len(self.qvel_buffer)}")
             logger_mp.info(f"  action buffer length: {len(self.action_buffer)}")
+            if has_loco_data:
+                logger_mp.info(f"  loco_state buffer length: {len(self.loco_state_buffer)}")
+                logger_mp.info(f"  loco_action buffer length: {len(self.loco_action_buffer)}")
             
             # Verify shapes match
             if qpos_data.shape != qvel_data.shape:
@@ -137,6 +164,12 @@ class EpisodeWriterHDF5:
                 obs_group = f.create_group('observations')
                 obs_group.create_dataset('qpos', data=qpos_data, compression='gzip')
                 obs_group.create_dataset('qvel', data=qvel_data, compression='gzip')
+                
+                # Save locomotion state if available
+                if has_loco_data:
+                    loco_state_data = np.array(self.loco_state_buffer, dtype=np.float32)  # [T, 11]
+                    obs_group.create_dataset('loco_state', data=loco_state_data, compression='gzip')
+                    logger_mp.info(f"  Saved loco_state: {loco_state_data.shape}")
                 
                 # Create images subgroup
                 if self.image_buffers:
@@ -159,15 +192,24 @@ class EpisodeWriterHDF5:
                 f.create_dataset('action', data=action_data, compression='gzip')
                 logger_mp.info(f"  Saved action: {action_data.shape}")
                 
+                # Save locomotion actions if available
+                if has_loco_data:
+                    loco_action_data = np.array(self.loco_action_buffer, dtype=np.float32)  # [T, 4]
+                    f.create_dataset('loco_action', data=loco_action_data, compression='gzip')
+                    logger_mp.info(f"  Saved loco_action: {loco_action_data.shape}")
+                
                 # Save metadata as attributes
                 f.attrs['episode_length'] = episode_length
                 f.attrs['fps'] = self.fps
                 f.attrs['robot_name'] = self.robot_name
                 f.attrs['timestamp'] = datetime.now().isoformat()
-                logger_mp.info(f"  Saved metadata: episode_length={episode_length}, fps={self.fps}, robot={self.robot_name}")
+                f.attrs['has_loco_data'] = has_loco_data
+                logger_mp.info(f"  Saved metadata: episode_length={episode_length}, fps={self.fps}, robot={self.robot_name}, has_loco={has_loco_data}")
             
             logger_mp.info(f"Episode saved successfully: {self.filepath}")
             logger_mp.info(f"  qpos: {qpos_data.shape}, qvel: {qvel_data.shape}, action: {action_data.shape}")
+            if has_loco_data:
+                logger_mp.info(f"  loco_state: {loco_state_data.shape}, loco_action: {loco_action_data.shape}")
             
             # Prepare for next episode
             self.episode_idx += 1
