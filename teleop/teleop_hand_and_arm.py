@@ -410,11 +410,33 @@ if __name__ == '__main__':
         sport_client.Init()
     
     # Subscribe to locomotion state when --motion is enabled (for recording or debugging)
+    # Use a threaded subscriber with buffer to avoid blocking the main loop
     loco_state_subscriber = None
+    loco_state_buffer = [None]  # Use list as mutable container for thread-safe access
+    loco_state_thread = None
+    
+    def _loco_state_subscribe_loop(subscriber, buffer):
+        """Background thread that continuously reads locomotion state"""
+        while running:
+            try:
+                msg = subscriber.Read()
+                if msg is not None:
+                    buffer[0] = msg
+            except Exception as e:
+                logger_mp.debug(f"[LOCO] Read error: {e}")
+            time.sleep(0.002)  # ~500Hz polling
+    
     if args.motion and (args.record or args.debug):
         loco_state_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
         loco_state_subscriber.Init()
-        logger_mp.info("SportModeState subscriber initialized (rt/sportmodestate)")
+        # Start background thread for non-blocking reads
+        loco_state_thread = threading.Thread(
+            target=_loco_state_subscribe_loop, 
+            args=(loco_state_subscriber, loco_state_buffer),
+            daemon=True
+        )
+        loco_state_thread.start()
+        logger_mp.info("SportModeState subscriber initialized (rt/sportmodestate) with background thread")
     
     # record + headless mode
     if args.record and args.headless:
@@ -470,6 +492,7 @@ if __name__ == '__main__':
                     is_recording = True
                     logger_mp.info("==> Recording started")
                 else:
+                    # check logs
                     recorder.stop_recording()
                     is_recording = False
                     logger_mp.info("==> Recording stopped and saved")
@@ -593,14 +616,11 @@ if __name__ == '__main__':
                                   f"R=[{sol_q[7]:.2f},{sol_q[8]:.2f},{sol_q[9]:.2f}...]")
 
             # Debug locomotion state (works even when not recording)
-            if args.debug and args.motion and loco_state_subscriber is not None and not is_recording:
-                loco_msg = loco_state_subscriber.Read()
-                if loco_msg is not None:
-                    logger_mp.info(f"[LOCO DEBUG] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}) "
-                                  f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}) "
-                                  f"yaw={loco_msg.imu_state.rpy[2]:.2f} height={loco_msg.body_height:.3f}")
-                else:
-                    logger_mp.warning("[LOCO DEBUG] No locomotion state received from rt/sportmodestate!")
+            if args.debug and args.motion and loco_state_buffer[0] is not None and not is_recording:
+                loco_msg = loco_state_buffer[0]
+                logger_mp.info(f"[LOCO DEBUG] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}) "
+                              f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}) "
+                              f"yaw={loco_msg.imu_state.rpy[2]:.2f} height={loco_msg.body_height:.3f}")
 
             # record data
             if args.record and is_recording:
@@ -626,44 +646,41 @@ if __name__ == '__main__':
                 full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
                 full_action = np.concatenate([sol_q, hand_action])
                 
-                # Get locomotion state if in motion mode
+                # Get locomotion state if in motion mode (read from buffer, non-blocking)
                 loco_state = None
                 loco_action = None
-                if args.motion and loco_state_subscriber is not None:
-                    loco_msg = loco_state_subscriber.Read()
-                    if loco_msg is not None:
-                        # Debug output for locomotion data
-                        if args.debug:
-                            logger_mp.info(f"[LOCO] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}, {loco_msg.position[2]:.2f}) "
-                                          f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}, {loco_msg.velocity[2]:.2f}) "
-                                          f"height={loco_msg.body_height:.3f} yaw_rate={loco_msg.yaw_speed:.2f} "
-                                          f"rpy=({loco_msg.imu_state.rpy[0]:.2f}, {loco_msg.imu_state.rpy[1]:.2f}, {loco_msg.imu_state.rpy[2]:.2f})")
-                        
-                        # loco_state: [11] - position(3), velocity(3), body_height, yaw_speed, rpy(3)
-                        loco_state = np.array([
-                            loco_msg.position[0],           # x
-                            loco_msg.position[1],           # y
-                            loco_msg.position[2],           # z
-                            loco_msg.velocity[0],           # vx
-                            loco_msg.velocity[1],           # vy
-                            loco_msg.velocity[2],           # vz
-                            loco_msg.body_height,           # height
-                            loco_msg.yaw_speed,             # yaw rate
-                            loco_msg.imu_state.rpy[0],      # roll
-                            loco_msg.imu_state.rpy[1],      # pitch
-                            loco_msg.imu_state.rpy[2],      # yaw (heading)
-                        ], dtype=np.float32)
-                        
-                        # loco_action: [4] - velocity commands (what user is commanding)
-                        # The velocity field represents the current commanded velocity
-                        loco_action = np.array([
-                            loco_msg.velocity[0],           # vx command
-                            loco_msg.velocity[1],           # vy command  
-                            loco_msg.yaw_speed,             # omega command
-                            loco_msg.body_height,           # height command
-                        ], dtype=np.float32)
-                    elif args.debug:
-                        logger_mp.warning("[LOCO] No locomotion state message received!")
+                if args.motion and loco_state_buffer[0] is not None:
+                    loco_msg = loco_state_buffer[0]
+                    # Debug output for locomotion data
+                    if args.debug:
+                        logger_mp.info(f"[LOCO] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}, {loco_msg.position[2]:.2f}) "
+                                      f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}, {loco_msg.velocity[2]:.2f}) "
+                                      f"height={loco_msg.body_height:.3f} yaw_rate={loco_msg.yaw_speed:.2f} "
+                                      f"rpy=({loco_msg.imu_state.rpy[0]:.2f}, {loco_msg.imu_state.rpy[1]:.2f}, {loco_msg.imu_state.rpy[2]:.2f})")
+                    
+                    # loco_state: [11] - position(3), velocity(3), body_height, yaw_speed, rpy(3)
+                    loco_state = np.array([
+                        loco_msg.position[0],           # x
+                        loco_msg.position[1],           # y
+                        loco_msg.position[2],           # z
+                        loco_msg.velocity[0],           # vx
+                        loco_msg.velocity[1],           # vy
+                        loco_msg.velocity[2],           # vz
+                        loco_msg.body_height,           # height
+                        loco_msg.yaw_speed,             # yaw rate
+                        loco_msg.imu_state.rpy[0],      # roll
+                        loco_msg.imu_state.rpy[1],      # pitch
+                        loco_msg.imu_state.rpy[2],      # yaw (heading)
+                    ], dtype=np.float32)
+                    
+                    # loco_action: [4] - velocity commands (what user is commanding)
+                    # The velocity field represents the current commanded velocity
+                    loco_action = np.array([
+                        loco_msg.velocity[0],           # vx command
+                        loco_msg.velocity[1],           # vy command  
+                        loco_msg.yaw_speed,             # omega command
+                        loco_msg.body_height,           # height command
+                    ], dtype=np.float32)
                 
                 # Prepare camera images in msc_humanoid_visual format
                 images = {}
