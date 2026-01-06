@@ -197,38 +197,13 @@ if __name__ == '__main__':
     logger_mp.info(f"args: {args}")
 
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
-    if args.sim:
-        img_config = {
-            'fps': 30,
-            'head_camera_type': 'realsense',
-            'head_camera_image_shape': [480, 640],  # Head camera resolution
-            'head_camera_id_numbers': [0],
-            'wrist_camera_type': 'opencv',
-            'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-            'wrist_camera_id_numbers': [2, 4],
-        }
-    else:
-        # Real hardware configuration
-        if args.inspire_bridge:
-            # When using inspire bridge, only head camera is available (no wrist cameras)
-            img_config = {
-                'fps': 30,
-                'head_camera_type': 'realsense',
-                'head_camera_image_shape': [480, 640],  # Head camera resolution
-                'head_camera_id_numbers': [0],
-                # No wrist cameras in inspire bridge mode
-            }
-        else:
-            # Standard real hardware with wrist cameras
-            img_config = {
-                'fps': 30,
-                'head_camera_type': 'realsense',
-                'head_camera_image_shape': [480, 640],  # Head camera resolution
-                'head_camera_id_numbers': [0],
-                'wrist_camera_type': 'opencv',
-                'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-                'wrist_camera_id_numbers': [2, 4],
-            }
+    # Image config - head camera only (no wrist cameras)
+    img_config = {
+        'fps': 30,
+        'head_camera_type': 'realsense',
+        'head_camera_image_shape': [480, 640],  # Head camera resolution
+        'head_camera_id_numbers': [0],
+    }
 
 
     ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
