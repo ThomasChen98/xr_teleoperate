@@ -2,6 +2,7 @@ import numpy as np
 import time
 import argparse
 import cv2
+import struct
 from multiprocessing import shared_memory, Value, Array, Lock
 import threading
 import concurrent.futures
@@ -30,12 +31,115 @@ from sshkeyboard import listen_keyboard, stop_listening
 # for simulation
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
-# for locomotion state recording
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import SportModeState_
+# Note: Locomotion data is extracted from lowstate (via arm controller) - no separate subscription needed
 def publish_reset_category(category: int,publisher): # Scene Reset signal
     msg = String_(data=str(category))
     publisher.Write(msg)
     logger_mp.info(f"published reset category: {category}")
+
+# ============================================================================
+# LOWSTATE PARSING HELPERS
+# Extract locomotion data from lowstate (IMU, controller inputs)
+# ============================================================================
+
+def parse_wireless_remote(wireless_remote):
+    """
+    Parse wireless_remote bytes (40 bytes) into controller inputs.
+    Based on Unitree SDK example: wireless_controller.py
+    
+    Returns:
+        loco_action: np.array [20] - [Lx, Ly, Rx, Ry, L1, L2, R1, R2, A, B, X, Y, Up, Down, Left, Right, Select, Start, F1, F3]
+    """
+    # Joystick values (float, -1 to 1)
+    Lx = struct.unpack('<f', bytes(wireless_remote[4:8]))[0]
+    Rx = struct.unpack('<f', bytes(wireless_remote[8:12]))[0]
+    Ry = struct.unpack('<f', bytes(wireless_remote[12:16]))[0]
+    Ly = struct.unpack('<f', bytes(wireless_remote[20:24]))[0]
+    
+    # Button states (from bytes 2 and 3)
+    data1, data2 = wireless_remote[2], wireless_remote[3]
+    R1 = float((data1 >> 0) & 1)
+    L1 = float((data1 >> 1) & 1)
+    Start = float((data1 >> 2) & 1)
+    Select = float((data1 >> 3) & 1)
+    R2 = float((data1 >> 4) & 1)
+    L2 = float((data1 >> 5) & 1)
+    F1 = float((data1 >> 6) & 1)
+    F3 = float((data1 >> 7) & 1)
+    A = float((data2 >> 0) & 1)
+    B = float((data2 >> 1) & 1)
+    X = float((data2 >> 2) & 1)
+    Y = float((data2 >> 3) & 1)
+    Up = float((data2 >> 4) & 1)
+    Right = float((data2 >> 5) & 1)
+    Down = float((data2 >> 6) & 1)
+    Left = float((data2 >> 7) & 1)
+    
+    # Return as [20] array: joysticks (4) + buttons (16)
+    return np.array([
+        Lx, Ly, Rx, Ry,  # Joysticks
+        L1, L2, R1, R2, A, B, X, Y, Up, Down, Left, Right, Select, Start, F1, F3  # Buttons
+    ], dtype=np.float32)
+
+
+def parse_lowstate_to_loco_data(lowstate_msg, robot_type='G1_29'):
+    """
+    Parse raw lowstate message into loco_state and loco_action arrays.
+    
+    Args:
+        lowstate_msg: Raw lowstate message from arm_ctrl.get_lowstate_raw()
+        robot_type: Robot type for determining knee joint indices
+    
+    Returns:
+        loco_state: np.array [17] - [mode, rpy(3), quat(4), accel(3), gyro(3), leg_joints(3)]
+        loco_action: np.array [20] - [joysticks(4), buttons(16)]
+        or (None, None) if lowstate_msg is None
+    """
+    if lowstate_msg is None:
+        return None, None
+    
+    # Extract IMU data
+    imu = lowstate_msg.imu_state
+    mode_machine = float(lowstate_msg.mode_machine)
+    
+    # RPY (roll, pitch, yaw) - in radians
+    rpy = np.array([imu.rpy[0], imu.rpy[1], imu.rpy[2]], dtype=np.float32)
+    
+    # Quaternion (w, x, y, z)
+    quat = np.array([imu.quaternion[0], imu.quaternion[1], imu.quaternion[2], imu.quaternion[3]], dtype=np.float32)
+    
+    # Accelerometer (x, y, z)
+    accel = np.array([imu.accelerometer[0], imu.accelerometer[1], imu.accelerometer[2]], dtype=np.float32)
+    
+    # Gyroscope (x, y, z)
+    gyro = np.array([imu.gyroscope[0], imu.gyroscope[1], imu.gyroscope[2]], dtype=np.float32)
+    
+    # Leg joint positions (knee joints as height proxy)
+    # G1_29: left knee = 3, right knee = 9 (based on G1_29_JointIndex)
+    # G1_23: similar indices
+    if robot_type in ['G1_29', 'G1_23']:
+        left_knee = lowstate_msg.motor_state[3].q if len(lowstate_msg.motor_state) > 9 else 0.0
+        right_knee = lowstate_msg.motor_state[9].q if len(lowstate_msg.motor_state) > 9 else 0.0
+    else:  # H1_2, H1
+        left_knee = lowstate_msg.motor_state[3].q if len(lowstate_msg.motor_state) > 9 else 0.0
+        right_knee = lowstate_msg.motor_state[9].q if len(lowstate_msg.motor_state) > 9 else 0.0
+    avg_knee = (left_knee + right_knee) / 2.0
+    leg_joints = np.array([left_knee, right_knee, avg_knee], dtype=np.float32)
+    
+    # Combine into loco_state [17]
+    loco_state = np.concatenate([
+        [mode_machine],  # [0]
+        rpy,             # [1:4]
+        quat,            # [4:8]
+        accel,           # [8:11]
+        gyro,            # [11:14]
+        leg_joints       # [14:17]
+    ])
+    
+    # Parse wireless_remote for controller inputs
+    loco_action = parse_wireless_remote(lowstate_msg.wireless_remote)
+    
+    return loco_state, loco_action
 
 # ============================================================================
 # RESET POSE CONFIGURATION
@@ -400,59 +504,13 @@ if __name__ == '__main__':
         sport_client.SetTimeout(0.0001)
         sport_client.Init()
     
-    # Subscribe to locomotion state when --motion is enabled (for recording or debugging)
-    # Use a threaded subscriber with buffer to avoid blocking the main loop
-    loco_state_subscriber = None
-    loco_state_buffer = [None]  # Use list as mutable container for thread-safe access
-    loco_state_thread = None
-    
-    def _loco_state_subscribe_loop(subscriber, buffer):
-        """Background thread that continuously reads locomotion state"""
-        while running:
-            try:
-                msg = subscriber.Read()
-                if msg is not None:
-                    buffer[0] = msg
-            except Exception as e:
-                logger_mp.debug(f"[LOCO] Read error: {e}")
-            time.sleep(0.002)  # ~500Hz polling
-    
+    # Locomotion data is extracted from lowstate (which the arm controller already subscribes to)
+    # No separate subscription needed - we use arm_ctrl.get_lowstate_raw() in the main loop
+    # This provides: IMU (rpy, quaternion, accel, gyro), mode_machine, and wireless_remote (controller inputs)
     if args.motion and (args.record or args.debug):
-        loco_state_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
-        loco_state_subscriber.Init()
-        
-        # Wait for first SportModeState message with proper timeout
-        # Note: Read() may block indefinitely if topic has no publishers, so use ThreadPoolExecutor
-        logger_mp.info("Waiting for SportModeState subscription (rt/sportmodestate)...")
-        
-        def try_read_loco():
-            """Attempt to read from subscriber - may block"""
-            return loco_state_subscriber.Read()
-        
-        first_msg = None
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(try_read_loco)
-            try:
-                first_msg = future.result(timeout=5.0)
-            except concurrent.futures.TimeoutError:
-                first_msg = None
-                logger_mp.debug("[LOCO] Read() timed out after 5s")
-        
-        if first_msg is None:
-            logger_mp.warning("[WARNING] No SportModeState received after 5s - loco data will NOT be recorded!")
-            logger_mp.warning("          Make sure robot is in sport/motion mode (R1+X or R1+Y on controller)")
-        else:
-            loco_state_buffer[0] = first_msg
-            logger_mp.info(f"[OK] SportModeState subscription confirmed (position: [{first_msg.position[0]:.2f}, {first_msg.position[1]:.2f}, {first_msg.position[2]:.2f}])")
-        
-        # Start background thread for non-blocking reads
-        loco_state_thread = threading.Thread(
-            target=_loco_state_subscribe_loop, 
-            args=(loco_state_subscriber, loco_state_buffer),
-            daemon=True
-        )
-        loco_state_thread.start()
-        logger_mp.info("SportModeState background thread started")
+        logger_mp.info("[LOCO] Locomotion data will be extracted from lowstate (IMU + controller inputs)")
+        logger_mp.info("       loco_state [17]: mode, rpy(3), quaternion(4), accel(3), gyro(3), leg_joints(3)")
+        logger_mp.info("       loco_action [20]: joysticks(4), buttons(16)")
     
     # record + headless mode
     if args.record and args.headless:
@@ -632,11 +690,15 @@ if __name__ == '__main__':
                                   f"R=[{sol_q[7]:.2f},{sol_q[8]:.2f},{sol_q[9]:.2f}...]")
 
             # Debug locomotion state (works even when not recording)
-            if args.debug and args.motion and loco_state_buffer[0] is not None and not is_recording:
-                loco_msg = loco_state_buffer[0]
-                logger_mp.info(f"[LOCO DEBUG] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}) "
-                              f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}) "
-                              f"yaw={loco_msg.imu_state.rpy[2]:.2f} height={loco_msg.body_height:.3f}")
+            if args.debug and args.motion and not is_recording:
+                lowstate_raw = arm_ctrl.get_lowstate_raw()
+                if lowstate_raw is not None:
+                    loco_state_dbg, loco_action_dbg = parse_lowstate_to_loco_data(lowstate_raw, robot_type=args.arm)
+                    if loco_state_dbg is not None:
+                        ctrl = loco_action_dbg
+                        logger_mp.info(f"[LOCO DEBUG] mode={int(loco_state_dbg[0])} "
+                                      f"rpy=({loco_state_dbg[1]:.2f}, {loco_state_dbg[2]:.2f}, {loco_state_dbg[3]:.2f}) "
+                                      f"ctrl: L=({ctrl[0]:.2f},{ctrl[1]:.2f}) R=({ctrl[2]:.2f},{ctrl[3]:.2f})")
 
             # record data
             if args.record and is_recording:
@@ -662,41 +724,21 @@ if __name__ == '__main__':
                 full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
                 full_action = np.concatenate([sol_q, hand_action])
                 
-                # Get locomotion state if in motion mode (read from buffer, non-blocking)
+                # Get locomotion state if in motion mode (from lowstate via arm controller)
                 loco_state = None
                 loco_action = None
-                if args.motion and loco_state_buffer[0] is not None:
-                    loco_msg = loco_state_buffer[0]
+                if args.motion:
+                    lowstate_raw = arm_ctrl.get_lowstate_raw()
+                    loco_state, loco_action = parse_lowstate_to_loco_data(lowstate_raw, robot_type=args.arm)
+                    
                     # Debug output for locomotion data
-                    if args.debug:
-                        logger_mp.info(f"[LOCO] pos=({loco_msg.position[0]:.2f}, {loco_msg.position[1]:.2f}, {loco_msg.position[2]:.2f}) "
-                                      f"vel=({loco_msg.velocity[0]:.2f}, {loco_msg.velocity[1]:.2f}, {loco_msg.velocity[2]:.2f}) "
-                                      f"height={loco_msg.body_height:.3f} yaw_rate={loco_msg.yaw_speed:.2f} "
-                                      f"rpy=({loco_msg.imu_state.rpy[0]:.2f}, {loco_msg.imu_state.rpy[1]:.2f}, {loco_msg.imu_state.rpy[2]:.2f})")
-                    
-                    # loco_state: [11] - position(3), velocity(3), body_height, yaw_speed, rpy(3)
-                    loco_state = np.array([
-                        loco_msg.position[0],           # x
-                        loco_msg.position[1],           # y
-                        loco_msg.position[2],           # z
-                        loco_msg.velocity[0],           # vx
-                        loco_msg.velocity[1],           # vy
-                        loco_msg.velocity[2],           # vz
-                        loco_msg.body_height,           # height
-                        loco_msg.yaw_speed,             # yaw rate
-                        loco_msg.imu_state.rpy[0],      # roll
-                        loco_msg.imu_state.rpy[1],      # pitch
-                        loco_msg.imu_state.rpy[2],      # yaw (heading)
-                    ], dtype=np.float32)
-                    
-                    # loco_action: [4] - velocity commands (what user is commanding)
-                    # The velocity field represents the current commanded velocity
-                    loco_action = np.array([
-                        loco_msg.velocity[0],           # vx command
-                        loco_msg.velocity[1],           # vy command  
-                        loco_msg.yaw_speed,             # omega command
-                        loco_msg.body_height,           # height command
-                    ], dtype=np.float32)
+                    if args.debug and loco_state is not None:
+                        # Parse controller inputs for debug display
+                        ctrl = loco_action
+                        logger_mp.info(f"[LOCO] mode={int(loco_state[0])} "
+                                      f"rpy=({loco_state[1]:.2f}, {loco_state[2]:.2f}, {loco_state[3]:.2f}) "
+                                      f"gyro=({loco_state[11]:.2f}, {loco_state[12]:.2f}, {loco_state[13]:.2f}) "
+                                      f"ctrl: L=({ctrl[0]:.2f},{ctrl[1]:.2f}) R=({ctrl[2]:.2f},{ctrl[3]:.2f})")
                 
                 # Prepare camera images in msc_humanoid_visual format
                 # IMPORTANT: Use .copy() to ensure each frame is stored independently

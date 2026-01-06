@@ -50,6 +50,21 @@ def verify_hdf5_format(filepath):
                     if obs['qpos'].shape != obs['qvel'].shape:
                         errors.append(f"Shape mismatch: qpos {obs['qpos'].shape} != qvel {obs['qvel'].shape}")
                 
+                # Check loco_state if present (optional, for --motion mode)
+                if 'loco_state' in obs:
+                    loco_state = obs['loco_state']
+                    print(f"[LOCO] loco_state shape: {loco_state.shape} dtype: {loco_state.dtype}")
+                    if len(loco_state.shape) == 2 and loco_state.shape[1] == 17:
+                        print(f"  Format: [mode, rpy(3), quaternion(4), accel(3), gyro(3), leg_joints(3)]")
+                        # Show sample values
+                        if len(loco_state) > 0:
+                            sample = loco_state[0]
+                            print(f"  Sample (t=0): mode={int(sample[0])}, rpy=({sample[1]:.2f},{sample[2]:.2f},{sample[3]:.2f})")
+                    elif len(loco_state.shape) == 2 and loco_state.shape[1] == 11:
+                        print(f"  Format: [x, y, z, vx, vy, vz, body_height, yaw_speed, roll, pitch, yaw] (legacy)")
+                    else:
+                        warnings.append(f"loco_state has unexpected shape: {loco_state.shape}")
+                
                 # Check images
                 if 'images' not in obs:
                     warnings.append("No images group found in /observations/images")
@@ -71,12 +86,27 @@ def verify_hdf5_format(filepath):
             # Check action
             if 'action' in f:
                 action = f['action']
-                print(f"\n✓ action shape: {action.shape} dtype: {action.dtype}")
+                print(f"\n[ACTION] action shape: {action.shape} dtype: {action.dtype}")
                 
                 # Check action shape matches qpos
                 if 'observations' in f and 'qpos' in f['observations']:
                     if action.shape != f['observations/qpos'].shape:
                         errors.append(f"Shape mismatch: action {action.shape} != qpos {f['observations/qpos'].shape}")
+            
+            # Check loco_action if present (optional, for --motion mode)
+            if 'loco_action' in f:
+                loco_action = f['loco_action']
+                print(f"[LOCO] loco_action shape: {loco_action.shape} dtype: {loco_action.dtype}")
+                if len(loco_action.shape) == 2 and loco_action.shape[1] == 20:
+                    print(f"  Format: [joysticks(4): Lx,Ly,Rx,Ry, buttons(16): L1,L2,R1,R2,A,B,X,Y,Up,Down,Left,Right,Select,Start,F1,F3]")
+                    # Show sample values
+                    if len(loco_action) > 0:
+                        sample = loco_action[0]
+                        print(f"  Sample (t=0): stick=({sample[0]:.2f},{sample[1]:.2f},{sample[2]:.2f},{sample[3]:.2f})")
+                elif len(loco_action.shape) == 2 and loco_action.shape[1] == 4:
+                    print(f"  Format: [vx, vy, omega, height] (legacy)")
+                else:
+                    warnings.append(f"loco_action has unexpected shape: {loco_action.shape}")
             
             # Check metadata
             print(f"\n✓ Metadata attributes:")
