@@ -145,7 +145,18 @@ class ImageClient:
             return
 
         if self.tv_enable_shm:
-            np.copyto(self.tv_img_array, np.array(current_image[:, :self.tv_img_shape[1]]))
+            try:
+                src_data = np.array(current_image[:, :self.tv_img_shape[1]])
+                np.copyto(self.tv_img_array, src_data)
+                # Debug: log every 30th frame to confirm updates are happening
+                if hasattr(self, '_shm_debug_count'):
+                    self._shm_debug_count += 1
+                else:
+                    self._shm_debug_count = 0
+                if self._shm_debug_count % 30 == 0:
+                    logger_mp.info(f"[SHM DEBUG] Frame {self._shm_debug_count}: copied {src_data.shape}, mean={self.tv_img_array.mean():.1f}")
+            except Exception as e:
+                logger_mp.error(f"[SHM ERROR] copyto failed: {e}, src={current_image.shape}, dst={self.tv_img_array.shape}")
         
         if self.wrist_enable_shm:
             np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1]:]))
