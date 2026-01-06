@@ -33,7 +33,8 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 class Dex3_1_Controller:
     def __init__(self, left_hand_array_in, right_hand_array_in, dual_hand_data_lock = None, dual_hand_state_array_out = None,
-                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False, simulation_mode = False):
+                       dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False, simulation_mode = False,
+                       dds_already_initialized = False):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
@@ -52,6 +53,8 @@ class Dex3_1_Controller:
         Unit_Test: Whether to enable unit testing
 
         simulation_mode: Whether to use simulation mode (default is False, which means using real robot)
+        
+        dds_already_initialized: Whether DDS has already been initialized (to avoid double initialization)
         """
         logger_mp.info("Initialize Dex3_1_Controller...")
 
@@ -63,10 +66,13 @@ class Dex3_1_Controller:
         else:
             self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test)
 
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
+        if not dds_already_initialized:
+            if self.simulation_mode:
+                ChannelFactoryInitialize(1)
+            else:
+                ChannelFactoryInitialize(0)
         else:
-            ChannelFactoryInitialize(0)
+            logger_mp.info("[Dex3_1_Controller] DDS already initialized, skipping ChannelFactoryInitialize")
 
         # initialize handcmd publisher and handstate subscriber
         self.LeftHandCmb_publisher = ChannelPublisher(kTopicDex3LeftCommand, HandCmd_)
@@ -236,7 +242,8 @@ kTopicGripperRightState = "rt/dex1/right/state"
 
 class Dex1_1_Gripper_Controller:
     def __init__(self, left_gripper_value_in, right_gripper_value_in, dual_gripper_data_lock = None, dual_gripper_state_out = None, dual_gripper_action_out = None, 
-                       filter = True, fps = 200.0, Unit_Test = False, simulation_mode = False):
+                       filter = True, fps = 200.0, Unit_Test = False, simulation_mode = False,
+                       dds_already_initialized = False):
         """
         [note] A *_array type parameter requires using a multiprocessing Array, because it needs to be passed to the internal child process
 
@@ -255,6 +262,8 @@ class Dex1_1_Gripper_Controller:
         Unit_Test: Whether to enable unit testing
 
         simulation_mode: Whether to use simulation mode (default is False, which means using real robot)
+        
+        dds_already_initialized: Whether DDS has already been initialized (to avoid double initialization)
         """
 
         logger_mp.info("Initialize Dex1_1_Gripper_Controller...")
@@ -269,10 +278,13 @@ class Dex1_1_Gripper_Controller:
         else:
             self.smooth_filter = None
 
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
+        if not dds_already_initialized:
+            if self.simulation_mode:
+                ChannelFactoryInitialize(1)
+            else:
+                ChannelFactoryInitialize(0)
         else:
-            ChannelFactoryInitialize(0)
+            logger_mp.info("[Dex1_1_Gripper_Controller] DDS already initialized, skipping ChannelFactoryInitialize")
  
         # initialize handcmd publisher and handstate subscriber
         self.LeftGripperCmb_publisher = ChannelPublisher(kTopicGripperLeftCommand, MotorCmds_)

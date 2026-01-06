@@ -314,14 +314,14 @@ if __name__ == '__main__':
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
         dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, dds_already_initialized=True)
     elif args.ee == "dex1":
         left_gripper_value = Value('d', 0.0, lock=True)        # [input]
         right_gripper_value = Value('d', 0.0, lock=True)       # [input]
         dual_gripper_data_lock = Lock()
         dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
         dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
-        gripper_ctrl = Dex1_1_Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, simulation_mode=args.sim)
+        gripper_ctrl = Dex1_1_Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, dual_gripper_state_array, dual_gripper_action_array, simulation_mode=args.sim, dds_already_initialized=True)
     elif args.ee == "inspire1":
         left_hand_pos_array = Array('d', 75, lock = True)      # [input]
         right_hand_pos_array = Array('d', 75, lock = True)     # [input]
@@ -409,12 +409,12 @@ if __name__ == '__main__':
         sport_client.SetTimeout(0.0001)
         sport_client.Init()
     
-    # Subscribe to locomotion state when --motion and --record are enabled
+    # Subscribe to locomotion state when --motion is enabled (for recording or debugging)
     loco_state_subscriber = None
-    if args.motion and args.record:
+    if args.motion and (args.record or args.debug):
         loco_state_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
         loco_state_subscriber.Init()
-        logger_mp.info("SportModeState subscriber initialized for locomotion data recording")
+        logger_mp.info("SportModeState subscriber initialized (rt/sportmodestate)")
     
     # record + headless mode
     if args.record and args.headless:
