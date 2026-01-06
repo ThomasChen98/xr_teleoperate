@@ -170,7 +170,7 @@ listen_keyboard_thread.start()
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_dir', type = str, default = './utils/data/', help = 'path to save data')
-    parser.add_argument('--frequency', type = float, default = 60.0, help = 'save data\'s frequency')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'save data\'s frequency (Hz)')
 
     # basic control parameters
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
