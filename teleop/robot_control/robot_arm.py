@@ -105,8 +105,8 @@ class G1_29_ArmController:
         self.subscribe_thread.start()
 
         with tqdm(desc="[G1_29] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-        while not self.lowstate_buffer.GetData():
-            time.sleep(0.1)
+            while not self.lowstate_buffer.GetData():
+                time.sleep(0.1)
                 pbar.update(1)
         logger_mp.info("[G1_29_ArmController] Subscribe dds ok.")
 
@@ -397,8 +397,8 @@ class G1_23_ArmController:
         self.subscribe_thread.start()
 
         with tqdm(desc="[G1_23] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-        while not self.lowstate_buffer.GetData():
-            time.sleep(0.1)
+            while not self.lowstate_buffer.GetData():
+                time.sleep(0.1)
                 pbar.update(1)
         logger_mp.info("[G1_23_ArmController] Subscribe dds ok.")
 
@@ -676,8 +676,8 @@ class H1_2_ArmController:
         self.subscribe_thread.start()
 
         with tqdm(desc="[H1_2] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-        while not self.lowstate_buffer.GetData():
-            time.sleep(0.1)
+            while not self.lowstate_buffer.GetData():
+                time.sleep(0.1)
                 pbar.update(1)
         logger_mp.info("[H1_2_ArmController] Subscribe dds ok.")
 
@@ -953,8 +953,8 @@ class H1_ArmController:
         self.subscribe_thread.start()
 
         with tqdm(desc="[H1] Waiting for DDS", unit="attempt", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
-        while not self.lowstate_buffer.GetData():
-            time.sleep(0.1)
+            while not self.lowstate_buffer.GetData():
+                time.sleep(0.1)
                 pbar.update(1)
         logger_mp.info("[H1_ArmController] Subscribe dds ok.")
 
