@@ -249,24 +249,21 @@ if __name__ == '__main__':
     tv_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(tv_img_shape) * np.uint8().itemsize)
     tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = tv_img_shm.buf)
 
-    if WRIST and args.sim:
+    # Create wrist shared memory if needed (but NOT ImageClient yet - ZMQ is not fork-safe)
+    wrist_img_shape = None
+    wrist_img_shm = None
+    wrist_img_array = None
+    if WRIST:
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
         wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                 wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name, server_address="127.0.0.1")
-    elif WRIST and not args.sim:
-        wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
-        wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
-        wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                 wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name)
-    else:
-        img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
-
-    # NOTE: Image receive thread will be started AFTER all subprocess-spawning components
-    # are initialized (TeleVuerWrapper spawns a process, and ZMQ is not fork-safe)
-    image_receive_thread = None  # Will be created later
+    
+    # NOTE: ImageClient will be created AFTER TeleVuerWrapper because:
+    # - TeleVuerWrapper spawns a subprocess (fork)
+    # - ZMQ sockets are created in ImageClient.__init__()
+    # - ZMQ sockets are NOT fork-safe - they get corrupted if created before fork
+    img_client = None
+    image_receive_thread = None
 
     # Initialize DDS with network interface if using inspire bridge mode
     # This MUST be done before creating arm controller to ensure correct network interface
@@ -284,6 +281,22 @@ if __name__ == '__main__':
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
     tv_wrapper = TeleVuerWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == "hand", img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
                                  return_state_data=True, return_hand_rot_data = False)
+
+    # NOW create ImageClient - AFTER TeleVuerWrapper fork, so ZMQ socket won't be corrupted
+    logger_mp.info("Creating ImageClient (after TeleVuerWrapper fork for ZMQ safety)...")
+    if WRIST and args.sim:
+        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name,
+                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name, server_address="127.0.0.1")
+    elif WRIST and not args.sim:
+        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name,
+                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name)
+    else:
+        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name)
+    
+    # Start image receive thread immediately after ImageClient creation
+    image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
+    image_receive_thread.start()
+    logger_mp.info("Image receive thread started")
 
     # arm
     if args.arm == "G1_29":
@@ -455,25 +468,6 @@ if __name__ == '__main__':
             fps=args.frequency
         )
         logger_mp.info(f"HDF5 Episode recorder initialized")
-        
-    # Start image receive thread AFTER all subprocess-spawning components are initialized
-    # This is critical because TeleVuerWrapper spawns a process, and ZMQ contexts
-    # are not fork-safe - starting the thread before the fork corrupts the ZMQ socket
-    logger_mp.info("Starting image receive thread (after all subprocess init)...")
-    image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
-    image_receive_thread.start()
-    
-    # Wait for first image to arrive
-    logger_mp.info("Waiting for first camera frame...")
-    max_wait = 5.0
-    start_wait = time.time()
-    while tv_img_array.max() == 0 and (time.time() - start_wait) < max_wait:
-        time.sleep(0.1)
-    
-    if tv_img_array.max() == 0:
-        logger_mp.warning("⚠️  No image received after 5s - camera may not be streaming!")
-    else:
-        logger_mp.info(f"✓ First image received (mean={tv_img_array.mean():.1f})")
     
     try:
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
