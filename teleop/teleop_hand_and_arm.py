@@ -419,6 +419,22 @@ if __name__ == '__main__':
     if args.motion and (args.record or args.debug):
         loco_state_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
         loco_state_subscriber.Init()
+        
+        # Wait for first SportModeState message to ensure DDS discovery is complete
+        logger_mp.info("Waiting for SportModeState subscription (rt/sportmodestate)...")
+        wait_start = time.time()
+        first_msg = None
+        while first_msg is None and (time.time() - wait_start) < 5.0:
+            first_msg = loco_state_subscriber.Read()
+            time.sleep(0.01)
+        
+        if first_msg is None:
+            logger_mp.warning("[WARNING] No SportModeState received after 5s - loco data will NOT be recorded!")
+            logger_mp.warning("          Make sure robot is in sport/motion mode (R1+X or R1+Y on controller)")
+        else:
+            loco_state_buffer[0] = first_msg
+            logger_mp.info(f"[OK] SportModeState subscription confirmed (position: [{first_msg.position[0]:.2f}, {first_msg.position[1]:.2f}, {first_msg.position[2]:.2f}])")
+        
         # Start background thread for non-blocking reads
         loco_state_thread = threading.Thread(
             target=_loco_state_subscribe_loop, 
@@ -426,7 +442,7 @@ if __name__ == '__main__':
             daemon=True
         )
         loco_state_thread.start()
-        logger_mp.info("SportModeState subscriber initialized (rt/sportmodestate) with background thread")
+        logger_mp.info("SportModeState background thread started")
     
     # record + headless mode
     if args.record and args.headless:
