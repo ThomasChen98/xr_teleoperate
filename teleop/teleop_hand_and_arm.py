@@ -268,6 +268,19 @@ if __name__ == '__main__':
     image_receive_thread.daemon = True
     image_receive_thread.start()
 
+    # Wait for first image to arrive before creating TeleVuerWrapper
+    # This prevents TeleVuerWrapper from caching a black/zero image on startup
+    logger_mp.info("Waiting for first camera frame...")
+    max_wait = 5.0
+    start_wait = time.time()
+    while tv_img_array.max() == 0 and (time.time() - start_wait) < max_wait:
+        time.sleep(0.1)
+    
+    if tv_img_array.max() == 0:
+        logger_mp.warning("⚠️  No image received after 5s - camera may not be streaming!")
+    else:
+        logger_mp.info(f"✓ First image received (mean={tv_img_array.mean():.1f})")
+
     # Initialize DDS with network interface if using inspire bridge mode
     # This MUST be done before creating arm controller to ensure correct network interface
     dds_already_initialized = False
@@ -683,21 +696,22 @@ if __name__ == '__main__':
                     ], dtype=np.float32)
                 
                 # Prepare camera images in msc_humanoid_visual format
+                # IMPORTANT: Use .copy() to ensure each frame is stored independently
+                # Without .copy(), numpy views may all reference the same underlying memory
                 images = {}
                 current_tv_image = tv_img_array.copy()
                 
                 if BINOCULAR:
                     # Split binocular image into left and right
-                    images["ego_cam"] = current_tv_image[:, :tv_img_shape[1]//2]  # Left eye
-                    # Could also save right eye as separate camera if needed
+                    images["ego_cam"] = current_tv_image[:, :tv_img_shape[1]//2].copy()
                 else:
-                    images["ego_cam"] = current_tv_image
+                    images["ego_cam"] = current_tv_image.copy()
                 
                 # Add wrist cameras if available
                 if WRIST:
                     current_wrist_image = wrist_img_array.copy()
-                    images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                    images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                    images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2].copy()
+                    images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:].copy()
                 
                 # Add timestep to HDF5 episode
                 recorder.add_timestep(
