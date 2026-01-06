@@ -209,6 +209,8 @@ class ImageClient:
         self._socket = self._context.socket(zmq.SUB)
         self._socket.connect(f"tcp://{self._server_address}:{self._port}")
         self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
+        # Set receive timeout so we can check self.running periodically
+        self._socket.setsockopt(zmq.RCVTIMEO, 500)  # 500ms timeout
 
         logger_mp.info("Image client has started, waiting to receive data...")
         try:
@@ -221,8 +223,12 @@ class ImageClient:
                     for msg in pending_msgs:
                         self._process_message(msg, time.time())
                 
-                # Receive message
-                message = self._socket.recv()
+                # Receive message (with timeout so we can check self.running)
+                try:
+                    message = self._socket.recv()
+                except zmq.Again:
+                    # Timeout - loop back and check self.running
+                    continue
                 receive_time = time.time()
                 
                 # Process the received message
@@ -231,7 +237,8 @@ class ImageClient:
         except KeyboardInterrupt:
             logger_mp.info("Image client interrupted by user.")
         except Exception as e:
-            logger_mp.warning(f"[Image Client] An error occurred while receiving data: {e}")
+            if self.running:  # Only log if not intentionally stopped
+                logger_mp.warning(f"[Image Client] An error occurred while receiving data: {e}")
         finally:
             self._close()
 

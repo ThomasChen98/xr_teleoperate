@@ -101,12 +101,20 @@ class Dex3_1_Controller:
             logger_mp.warning("[Dex3_1_Controller] Waiting to subscribe dds...")
         logger_mp.info("[Dex3_1_Controller] Subscribe dds ok.")
 
-        hand_control_process = Process(target=self.control_process, args=(left_hand_array_in, right_hand_array_in,  self.left_hand_state_array, self.right_hand_state_array,
+        self.hand_control_process = Process(target=self.control_process, args=(left_hand_array_in, right_hand_array_in,  self.left_hand_state_array, self.right_hand_state_array,
                                                                           dual_hand_data_lock, dual_hand_state_array_out, dual_hand_action_array_out))
-        hand_control_process.daemon = True
-        hand_control_process.start()
+        self.hand_control_process.daemon = True
+        self.hand_control_process.start()
 
         logger_mp.info("Initialize Dex3_1_Controller OK!\n")
+    
+    def stop(self):
+        """Stop the hand control process"""
+        if hasattr(self, 'hand_control_process') and self.hand_control_process.is_alive():
+            logger_mp.info("[Dex3_1_Controller] Terminating hand control process...")
+            self.hand_control_process.terminate()
+            self.hand_control_process.join(timeout=2)
+            logger_mp.info("[Dex3_1_Controller] Hand control process terminated.")
 
     def _subscribe_hand_state(self):
         while True:
@@ -317,6 +325,10 @@ class Dex1_1_Gripper_Controller:
         self.gripper_control_thread.start()
 
         logger_mp.info("Initialize Dex1_1_Gripper_Controller OK!\n")
+    
+    def stop(self):
+        """Stop the gripper control (threads are daemon, so this is mainly for logging)"""
+        logger_mp.info("[Dex1_1_Gripper_Controller] Stop called - daemon threads will terminate with main process.")
 
     def _subscribe_gripper_state(self):
         while True:

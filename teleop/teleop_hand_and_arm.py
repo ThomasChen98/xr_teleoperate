@@ -511,6 +511,12 @@ if __name__ == '__main__':
             
             # get input data
             tele_data = tv_wrapper.get_motion_state_data()
+            
+            # Debug: confirm VR poses received from headset
+            if args.debug:
+                logger_mp.info(f"[VR POSE] Left: ({tele_data.left_arm_pose[0,3]:.3f}, {tele_data.left_arm_pose[1,3]:.3f}, {tele_data.left_arm_pose[2,3]:.3f}) "
+                              f"Right: ({tele_data.right_arm_pose[0,3]:.3f}, {tele_data.right_arm_pose[1,3]:.3f}, {tele_data.right_arm_pose[2,3]:.3f})")
+            
             if (args.ee == "dex3" or args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
                 with left_hand_pos_array.get_lock():
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
@@ -579,6 +585,12 @@ if __name__ == '__main__':
                 time_ik_end = time.time()
                 logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
                 arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+                
+                # Debug: confirm robot command sent
+                if args.debug:
+                    logger_mp.info(f"[ROBOT CMD] IK solved in {(time_ik_end - time_ik_start)*1000:.1f}ms, "
+                                  f"L=[{sol_q[0]:.2f},{sol_q[1]:.2f},{sol_q[2]:.2f}...] "
+                                  f"R=[{sol_q[7]:.2f},{sol_q[8]:.2f},{sol_q[9]:.2f}...]")
 
             # Debug locomotion state (works even when not recording)
             if args.debug and args.motion and loco_state_subscriber is not None and not is_recording:
@@ -691,17 +703,46 @@ if __name__ == '__main__':
         logger_mp.info("SHUTDOWN: KeyboardInterrupt received, exiting program...")
         logger_mp.info("=" * 60)
     finally:
-        logger_mp.info("Shutting down robot control...")
-        arm_ctrl.ctrl_dual_arm_go_home()
+        logger_mp.info("=" * 60)
+        logger_mp.info("CLEANUP: Shutting down all components...")
+        logger_mp.info("=" * 60)
+        
+        # Stop keyboard listener first (signal it to stop)
+        logger_mp.info("[CLEANUP] Stopping keyboard listener...")
+        try:
+            stop_listening()
+        except Exception as e:
+            logger_mp.debug(f"[CLEANUP] stop_listening: {e}")
+        
+        # Stop image client
+        logger_mp.info("[CLEANUP] Stopping image client...")
+        img_client.running = False
+        try:
+            image_receive_thread.join(timeout=1)
+        except Exception as e:
+            logger_mp.debug(f"[CLEANUP] Image thread join: {e}")
+        
+        # Stop hand/gripper controller
+        if args.ee == "dex3":
+            logger_mp.info("[CLEANUP] Stopping Dex3 hand controller...")
+            hand_ctrl.stop()
+        elif args.ee == "dex1":
+            logger_mp.info("[CLEANUP] Stopping Dex1 gripper controller...")
+            gripper_ctrl.stop()
+        
+        # Send robot arms home
+        logger_mp.info("[CLEANUP] Sending robot arms to home position...")
+        try:
+            arm_ctrl.ctrl_dual_arm_go_home()
+        except Exception as e:
+            logger_mp.warning(f"[CLEANUP] Failed to send arms home: {e}")
+        
+        # Stop simulation state subscriber if in sim mode
         if args.sim:
             sim_state_subscriber.stop_subscribe()
-        tv_img_shm.close()
-        tv_img_shm.unlink()
-        if WRIST:
-            wrist_img_shm.close()
-            wrist_img_shm.unlink()
+        
+        # Save any active recording
         if args.record:
-            # Stop and save any active recording
             if recorder.is_recording():
                 logger_mp.info("=" * 60)
                 logger_mp.info("SAVING EPISODE: Please wait, this may take 30-60 seconds...")
@@ -711,6 +752,34 @@ if __name__ == '__main__':
                 logger_mp.info("=" * 60)
                 logger_mp.info("EPISODE SAVED SUCCESSFULLY!")
                 logger_mp.info("=" * 60)
-        listen_keyboard_thread.join()
+        
+        # Clean up shared memory
+        logger_mp.info("[CLEANUP] Cleaning up shared memory...")
+        try:
+            tv_img_shm.close()
+            tv_img_shm.unlink()
+        except Exception as e:
+            logger_mp.warning(f"[CLEANUP] Failed to cleanup tv_img_shm: {e}")
+        
+        if WRIST:
+            try:
+                wrist_img_shm.close()
+                wrist_img_shm.unlink()
+            except Exception as e:
+                logger_mp.warning(f"[CLEANUP] Failed to cleanup wrist_img_shm: {e}")
+        
+        # Wait for keyboard listener thread to finish (already signaled to stop earlier)
+        try:
+            listen_keyboard_thread.join(timeout=1)
+            if listen_keyboard_thread.is_alive():
+                logger_mp.debug("[CLEANUP] Keyboard thread still alive, will be killed on exit")
+        except Exception as e:
+            logger_mp.debug(f"[CLEANUP] Keyboard thread join: {e}")
+        
+        logger_mp.info("=" * 60)
         logger_mp.info("Program exited cleanly.")
-        exit(0)
+        logger_mp.info("=" * 60)
+        
+        # Force exit to kill any remaining daemon threads
+        import os
+        os._exit(0)
