@@ -101,8 +101,9 @@ class Inspire_Bridge_Controller:
         self.LeftHandState_subscriber = ChannelSubscriber(kTopicInspireLeftState, inspire_hand_state)
         self.LeftHandState_subscriber.Init()
         
-        self.RightHandState_subscriber = ChannelSubscriber(kTopicInspireRightState, inspire_hand_state)
-        self.RightHandState_subscriber.Init()
+        # Skip right hand state subscriber - right hand is broken
+        logger_mp.warning("RIGHT HAND STATE SUBSCRIBER SKIPPED - Right hand is broken")
+        self.RightHandState_subscriber = None
         
         # Shared Arrays for hand states
         self.left_hand_state_array = Array('d', Inspire_Num_Motors, lock=True)  
@@ -119,21 +120,22 @@ class Inspire_Bridge_Controller:
         self.subscribe_state_thread.daemon = True
         self.subscribe_state_thread.start()
 
-        # Wait for hand state subscription (with timeout for simulation)
+        # Wait for left hand state subscription (with timeout for simulation)
+        # Right hand is broken - only wait for left hand
         timeout = 20.0  # 20 second timeout
         start_time = time.time()
         while True:
-            if any(self.right_hand_state_array):
+            if any(self.left_hand_state_array):
                 break
             if time.time() - start_time > timeout:
                 if simulation_mode:
-                    logger_mp.warning("[Inspire_Bridge_Controller] No hand state in simulation mode - continuing anyway")
+                    logger_mp.warning("[Inspire_Bridge_Controller] No left hand state in simulation mode - continuing anyway")
                     break
                 else:
-                    logger_mp.error("[Inspire_Bridge_Controller] Timeout waiting for hand state - check hand connections")
+                    logger_mp.error("[Inspire_Bridge_Controller] Timeout waiting for left hand state - check hand connections")
                     break
             time.sleep(1)
-            logger_mp.warning("[Inspire_Bridge_Controller] Waiting to subscribe hand state...")
+            logger_mp.warning("[Inspire_Bridge_Controller] Waiting to subscribe left hand state...")
         
         logger_mp.info("[Inspire_Bridge_Controller] Hand state subscription ready")
 
@@ -169,17 +171,11 @@ class Inspire_Bridge_Controller:
             )
             logger_mp.info(f"Left hand bridge created (IP: {self.left_hand_ip})")
             
-            # Create right hand bridge
-            self.right_bridge_handler = inspire_sdk.ModbusDataHandler(
-                ip=self.right_hand_ip,
-                LR='r',
-                device_id=1,
-                initDDS=False,  # DDS already initialized by arm controller
-                network=self.network_interface
-            )
-            logger_mp.info(f"Right hand bridge created (IP: {self.right_hand_ip})")
+            # Skip right hand bridge - right hand is broken
+            logger_mp.warning("RIGHT HAND BRIDGE SKIPPED - Right hand is broken, using dummy values")
+            self.right_bridge_handler = None
             
-            # Start bridge threads
+            # Start bridge threads (only left hand)
             self.start_bridge_threads()
             
         except Exception as e:
@@ -200,16 +196,10 @@ class Inspire_Bridge_Controller:
         left_thread.start()
         self.bridge_threads.append(left_thread)
         
-        # Right hand bridge thread
-        right_thread = threading.Thread(
-            target=self.run_bridge,
-            args=(self.right_bridge_handler, "Right Hand"),
-            daemon=True
-        )
-        right_thread.start()
-        self.bridge_threads.append(right_thread)
+        # Skip right hand bridge thread - right hand is broken
+        logger_mp.warning("RIGHT HAND BRIDGE THREAD SKIPPED - Right hand is broken")
         
-        logger_mp.info("Both hand bridges started!")
+        logger_mp.info("Left hand bridge started (right hand skipped)!")
         time.sleep(1)  # Let bridges initialize
 
     def run_bridge(self, handler, name):
@@ -236,6 +226,10 @@ class Inspire_Bridge_Controller:
 
     def _subscribe_hand_state(self):
         """Subscribe to hand state messages from both hands"""
+        # Initialize right hand state array with dummy values of 950
+        for idx in range(Inspire_Num_Motors):
+            self.right_hand_state_array[idx] = 950.0
+        
         while True:
             try:
                 # Read left hand state
@@ -244,11 +238,8 @@ class Inspire_Bridge_Controller:
                     for idx in range(min(Inspire_Num_Motors, len(left_msg.angle_act))):
                         self.left_hand_state_array[idx] = left_msg.angle_act[idx]
                 
-                # Read right hand state
-                right_msg = self.RightHandState_subscriber.Read()
-                if right_msg is not None and hasattr(right_msg, 'angle_act'):
-                    for idx in range(min(Inspire_Num_Motors, len(right_msg.angle_act))):
-                        self.right_hand_state_array[idx] = right_msg.angle_act[idx]
+                # Skip right hand state - right hand is broken, keep dummy values of 950
+                # (right hand state subscription skipped)
                         
             except Exception as e:
                 logger_mp.debug(f"Hand state read error: {e}")
@@ -283,17 +274,12 @@ class Inspire_Bridge_Controller:
         left_cmd.speed_set = [0] * Inspire_Num_Motors
         left_cmd.mode = 0b0001  # Angle control mode
         
-        # Create right hand command (angle mode)
-        right_cmd = inspire_hand_defaut.get_inspire_hand_ctrl()
-        right_cmd.angle_set = [int(angle) for angle in right_q_target]
-        right_cmd.pos_set = [0] * Inspire_Num_Motors
-        right_cmd.force_set = [0] * Inspire_Num_Motors
-        right_cmd.speed_set = [0] * Inspire_Num_Motors
-        right_cmd.mode = 0b0001  # Angle control mode
+        # Skip right hand command - right hand is broken
+        # (right_cmd creation and publishing skipped)
         
-        # Publish commands
+        # Publish commands (only left hand)
         self.LeftHandCmd_publisher.Write(left_cmd)
-        self.RightHandCmd_publisher.Write(right_cmd)
+        # Right hand publishing skipped - hand is broken
     
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, 
                        right_hand_state_array, left_hand_cmd_array, right_hand_cmd_array,
@@ -304,7 +290,8 @@ class Inspire_Bridge_Controller:
 
         # Initialize with fully open hands
         left_q_target = np.full(Inspire_Num_Motors, float(self.INSPIRE_HAND_OPEN))
-        right_q_target = np.full(Inspire_Num_Motors, float(self.INSPIRE_HAND_OPEN))
+        # Right hand is broken - use dummy value of 950
+        right_q_target = np.full(Inspire_Num_Motors, 950.0)
 
         try:
             while self.running:
@@ -317,30 +304,27 @@ class Inspire_Bridge_Controller:
                     right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
 
                 # Read current hand states
-                state_data = np.concatenate((
-                    np.array(left_hand_state_array[:]), 
-                    np.array(right_hand_state_array[:])
-                ))
+                # Right hand is broken - use dummy state values of 950
+                left_state = np.array(left_hand_state_array[:])
+                right_state = np.full(Inspire_Num_Motors, 950.0)
+                state_data = np.concatenate((left_state, right_state))
 
                 # Check if hand data has been initialized (not all zeros and not default position)
-                is_right_hand_valid = not np.all(right_hand_data == 0.0)
+                # Right hand is broken - skip right hand validation
                 is_left_hand_valid = not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15]))
                 
-                if is_right_hand_valid and is_left_hand_valid:
+                if is_left_hand_valid:
                     # Retarget hand skeleton to inspire hand angles
                     ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - \
                                     left_hand_data[self.hand_retargeting.left_indices[0,:]]
-                    ref_right_value = right_hand_data[self.hand_retargeting.right_indices[1,:]] - \
-                                     right_hand_data[self.hand_retargeting.right_indices[0,:]]
+                    # Right hand is broken - skip right hand retargeting
 
                     left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[
                         self.hand_retargeting.left_dex_retargeting_to_hardware]
-                    right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[
-                        self.hand_retargeting.right_dex_retargeting_to_hardware]
+                    # Right hand is broken - keep dummy value of 950
+                    right_q_target = np.full(Inspire_Num_Motors, 950.0)
 
-                    # Convert from radians to inspire hand units (0-1000)
-                    # ...existing normalization code...
-                    
+                    # Convert from radians to inspire hand units (0-1000) - only for left hand
                     def normalize(val, min_val, max_val):
                         """Normalize value to [0, 1000] with inversion (high rad = closed = low inspire value)"""
                         normalized = np.clip((max_val - val) / (max_val - min_val), 0.0, 1.0)
@@ -349,13 +333,13 @@ class Inspire_Bridge_Controller:
                     for idx in range(Inspire_Num_Motors):
                         if idx <= 3:  # Finger joints
                             left_q_target[idx] = normalize(left_q_target[idx], 0.0, 1.7)
-                            right_q_target[idx] = normalize(right_q_target[idx], 0.0, 1.7)
+                            # Right hand keeps dummy value of 950
                         elif idx == 4:  # Thumb bend
                             left_q_target[idx] = normalize(left_q_target[idx], 0.0, 0.5)
-                            right_q_target[idx] = normalize(right_q_target[idx], 0.0, 0.5)
+                            # Right hand keeps dummy value of 950
                         elif idx == 5:  # Thumb rotation
                             left_q_target[idx] = normalize(left_q_target[idx], -0.1, 1.3)
-                            right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
+                            # Right hand keeps dummy value of 950
 
                 # Get dual hand action for recording
                 action_data = np.concatenate((left_q_target, right_q_target))
@@ -367,6 +351,7 @@ class Inspire_Bridge_Controller:
                 # Write commands to shared arrays (publishing thread will send them)
                 with left_hand_cmd_array.get_lock():
                     left_hand_cmd_array[:] = left_q_target
+                # Right hand is broken - still write dummy values for consistency
                 with right_hand_cmd_array.get_lock():
                     right_hand_cmd_array[:] = right_q_target
                 
