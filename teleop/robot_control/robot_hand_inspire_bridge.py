@@ -70,6 +70,12 @@ class Inspire_Bridge_Controller:
         self.right_bridge_handler = None
         self.bridge_threads = []
         self.bridge_running = False
+
+        # Connection status tracking
+        self.left_bridge_connected = False
+        self.right_bridge_connected = False
+        self._reconnect_left_requested = False
+        self._reconnect_right_requested = False
         
         # Shared arrays for hand commands (output from control process)
         self.left_hand_cmd_array = Array('d', Inspire_Num_Motors, lock=True)
@@ -203,17 +209,75 @@ class Inspire_Bridge_Controller:
         time.sleep(1)  # Let bridges initialize
 
     def run_bridge(self, handler, name):
-        """Run a single bridge (DDS ↔ Modbus)"""
+        """Run a single bridge (DDS ↔ Modbus) with connection monitoring and reconnect support"""
         logger_mp.info(f"{name} bridge thread started")
+        is_left = "Left" in name
+        consecutive_errors = 0
+        
+        # Safety check: Right hand bridge should never be created
+        if not is_left and handler is None:
+            logger_mp.warning(f"{name} bridge: Handler is None (right hand is broken) - exiting thread")
+            return
         
         while self.bridge_running:
             try:
+                # Check if reconnect was requested for this hand
+                # Note: Right hand bridge should never exist, but keeping logic for safety
+                reconnect_requested = self._reconnect_left_requested if is_left else self._reconnect_right_requested
+                
+                if reconnect_requested:
+                    logger_mp.info(f"{name} bridge: Reconnect requested...")
+                    if handler and handler.reconnect():
+                        logger_mp.info(f"{name} bridge: Reconnected successfully!")
+                        consecutive_errors = 0
+                        if is_left:
+                            self.left_bridge_connected = True
+                            self._reconnect_left_requested = False
+                        else:
+                            # Right hand should never reach here since handler is None
+                            self.right_bridge_connected = True
+                            self._reconnect_right_requested = False
+                    else:
+                        logger_mp.error(f"{name} bridge: Reconnect failed!")
+                        if is_left:
+                            self._reconnect_left_requested = False
+                        else:
+                            self._reconnect_right_requested = False
+                        time.sleep(1)  # Wait before continuing
+                        continue
                 # This reads from physical hand and publishes state to DDS
                 # Also listens for DDS commands and sends them to physical hands
+                result = handler.read()
+                
+                # Check if read was successful
+                if result is None or all(v is None for v in result.get('states', {}).values()):
+                    consecutive_errors += 1
+                    if consecutive_errors > 50:  # ~1 second at 50Hz
+                        if is_left:
+                            if self.left_bridge_connected:
+                                logger_mp.warning(f"{name} bridge: Connection lost (consecutive errors: {consecutive_errors})")
+                            self.left_bridge_connected = False
+                        else:
+                            if self.right_bridge_connected:
+                                logger_mp.warning(f"{name} bridge: Connection lost (consecutive errors: {consecutive_errors})")
+                            self.right_bridge_connected = False
+                else:
+                    if consecutive_errors > 10:
+                        logger_mp.info(f"{name} bridge: Connection recovered")
+                    consecutive_errors = 0
+                    if is_left:
+                        self.left_bridge_connected = True
+                    else:
+                        self.right_bridge_connected = True
                 handler.read()
                 time.sleep(0.02)  # ~50Hz bridge update
             except Exception as e:
                 logger_mp.error(f"{name} bridge error: {e}")
+                consecutive_errors += 1
+                if is_left:
+                    self.left_bridge_connected = False
+                else:
+                    self.right_bridge_connected = False
                 time.sleep(0.1)
 
     def stop_bridges(self):
@@ -223,6 +287,57 @@ class Inspire_Bridge_Controller:
         for thread in self.bridge_threads:
             thread.join(timeout=2)
         logger_mp.info("Hand bridges stopped")
+
+    def request_reconnect(self, left=True, right=True):
+        """
+        Request bridge reconnection for one or both hands.
+        
+        Args:
+            left: Reconnect left hand bridge
+            right: Reconnect right hand bridge (ignored - right hand is broken)
+            
+        Returns:
+            Tuple of (left_success, right_success)
+        """
+        logger_mp.info("=" * 60)
+        logger_mp.info("HAND RECONNECT REQUESTED")
+        logger_mp.info("=" * 60)
+        
+        success_left = True
+        success_right = True  # Always True since right hand is broken/skipped
+        
+        if left and self.left_bridge_handler:
+            logger_mp.info(f"Reconnecting left hand (IP: {self.left_hand_ip})...")
+            self._reconnect_left_requested = True
+            # Also do immediate reconnect
+            success_left = self.left_bridge_handler.reconnect()
+            self._reconnect_left_requested = False
+            self.left_bridge_connected = success_left
+            logger_mp.info(f"Left hand reconnect: {'SUCCESS' if success_left else 'FAILED'}")
+        elif left:
+            logger_mp.warning("Left hand bridge handler not initialized")
+            success_left = False
+            
+        # Right hand is broken - skip reconnection
+        if right:
+            logger_mp.warning("RIGHT HAND RECONNECT SKIPPED - Right hand is broken, using dummy values")
+            success_right = True  # Consider it "successful" since we're intentionally skipping it
+        
+        logger_mp.info("=" * 60)
+        return success_left, success_right
+
+    def get_connection_status(self):
+        """
+        Get connection status of both hands.
+        
+        Returns:
+            Dict with 'left' and 'right' boolean connection status
+            Note: right hand always returns False since it's broken
+        """
+        return {
+            'left': self.left_bridge_connected,
+            'right': False  # Right hand is broken - always disconnected
+        }
 
     def _subscribe_hand_state(self):
         """Subscribe to hand state messages from both hands"""

@@ -26,6 +26,7 @@ import numpy as np
 import os
 from datetime import datetime
 import logging_mp
+from tqdm import tqdm
 
 logger_mp = logging_mp.get_logger(__name__)
 
@@ -121,9 +122,11 @@ class EpisodeWriterHDF5:
             episode_length = len(self.qpos_buffer)
             
             logger_mp.info(f"Saving episode {self.episode_idx}: {episode_length} timesteps")
-            logger_mp.info(f"  qpos buffer length: {len(self.qpos_buffer)}")
-            logger_mp.info(f"  qvel buffer length: {len(self.qvel_buffer)}")
-            logger_mp.info(f"  action buffer length: {len(self.action_buffer)}")
+            logger_mp.info(f"  Duration: {episode_length / self.fps:.1f} seconds")
+            logger_mp.info(f"  Joint data: qpos={len(self.qpos_buffer)}, qvel={len(self.qvel_buffer)}, actions={len(self.action_buffer)}")
+            if self.image_buffers:
+                total_images = sum(len(frames) for frames in self.image_buffers.values())
+                logger_mp.info(f"  Image data: {len(self.image_buffers)} cameras, {total_images} total frames")
             
             # Verify shapes match
             if qpos_data.shape != qvel_data.shape:
@@ -131,43 +134,68 @@ class EpisodeWriterHDF5:
             if qpos_data.shape != action_data.shape:
                 logger_mp.error(f"Shape mismatch: qpos {qpos_data.shape} != action {action_data.shape}")
             
-            # Save to HDF5 in msc_humanoid_visual format
-            with h5py.File(self.filepath, 'w') as f:
-                # Create observations group
-                obs_group = f.create_group('observations')
-                obs_group.create_dataset('qpos', data=qpos_data, compression='gzip')
-                obs_group.create_dataset('qvel', data=qvel_data, compression='gzip')
+            # Calculate total steps for progress bar
+            total_steps = 3  # joint data (qpos, qvel, action)
+            if self.image_buffers:
+                total_steps += len(self.image_buffers)  # one step per camera
+            total_steps += 1  # metadata
+            
+            # Save to HDF5 in msc_humanoid_visual format with overall progress
+            with tqdm(total=total_steps, desc="Saving Episode", unit="step") as overall_pbar:
+                with h5py.File(self.filepath, 'w') as f:
+                    # Create observations group with progress bar
+                    overall_pbar.set_description("Saving joint data")
+                    obs_group = f.create_group('observations')
+                    
+                    obs_group.create_dataset('qpos', data=qpos_data, compression='gzip')
+                    overall_pbar.update(1)
+                    
+                    obs_group.create_dataset('qvel', data=qvel_data, compression='gzip')
+                    overall_pbar.update(1)
+                    
+                    f.create_dataset('action', data=action_data, compression='gzip')
+                    overall_pbar.update(1)
                 
-                # Create images subgroup
-                if self.image_buffers:
-                    logger_mp.info(f"  Saving {len(self.image_buffers)} camera streams (this may take a moment)...")
-                    images_group = obs_group.create_group('images')
-                    for cam_idx, (camera_name, frames) in enumerate(self.image_buffers.items(), 1):
-                        logger_mp.info(f"    [{cam_idx}/{len(self.image_buffers)}] Compressing {camera_name}...")
-                        image_data = np.array(frames, dtype=np.uint8)  # [T, H, W, 3]
-                        images_group.create_dataset(
-                            camera_name, 
-                            data=image_data,
-                            compression='gzip',
-                            compression_opts=4
-                        )
-                        logger_mp.info(f"    [{cam_idx}/{len(self.image_buffers)}] Saved {camera_name}: {image_data.shape}")
-                else:
-                    logger_mp.warning("  No images to save")
+                    # Create images subgroup with detailed progress
+                    if self.image_buffers:
+                        images_group = obs_group.create_group('images')
+                        
+                        for camera_name, frames in self.image_buffers.items():
+                            overall_pbar.set_description(f"Saving {camera_name}")
+                            
+                            # Convert frames to numpy array
+                            image_data = np.array(frames, dtype=np.uint8)  # [T, H, W, 3]
+                            
+                            # Save with compression
+                            images_group.create_dataset(
+                                camera_name, 
+                                data=image_data,
+                                compression='gzip',
+                                compression_opts=4
+                            )
+                            
+                            logger_mp.info(f"    ✓ Saved {camera_name}: {image_data.shape}")
+                            overall_pbar.update(1)
+                    else:
+                        logger_mp.warning("  No images to save")
                 
-                # Save actions
-                f.create_dataset('action', data=action_data, compression='gzip')
-                logger_mp.info(f"  Saved action: {action_data.shape}")
-                
-                # Save metadata as attributes
-                f.attrs['episode_length'] = episode_length
-                f.attrs['fps'] = self.fps
-                f.attrs['robot_name'] = self.robot_name
-                f.attrs['timestamp'] = datetime.now().isoformat()
-                logger_mp.info(f"  Saved metadata: episode_length={episode_length}, fps={self.fps}, robot={self.robot_name}")
+                    # Save metadata as attributes
+                    overall_pbar.set_description("Saving metadata")
+                    f.attrs['episode_length'] = episode_length
+                    f.attrs['fps'] = self.fps
+                    f.attrs['robot_name'] = self.robot_name
+                    f.attrs['timestamp'] = datetime.now().isoformat()
+                    overall_pbar.update(1)
+                    
+                    overall_pbar.set_description("Complete!")
+                    logger_mp.info(f"  ✓ All data saved successfully")
+            
+            # Get file size for reporting
+            file_size_mb = os.path.getsize(self.filepath) / (1024 * 1024)
             
             logger_mp.info(f"Episode saved successfully: {self.filepath}")
-            logger_mp.info(f"  qpos: {qpos_data.shape}, qvel: {qvel_data.shape}, action: {action_data.shape}")
+            logger_mp.info(f"  File size: {file_size_mb:.1f} MB")
+            logger_mp.info(f"  Data shapes - qpos: {qpos_data.shape}, qvel: {qvel_data.shape}, action: {action_data.shape}")
             
             # Prepare for next episode
             self.episode_idx += 1

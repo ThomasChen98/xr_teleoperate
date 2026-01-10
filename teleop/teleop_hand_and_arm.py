@@ -42,8 +42,10 @@ start_signal = False
 running = True
 should_toggle_recording = False
 is_recording = False
+should_reconnect_hands = False  # Request to reconnect inspire hands
+
 def on_press(key):
-    global running, start_signal, should_toggle_recording
+    global running, start_signal, should_toggle_recording, should_reconnect_hands
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
@@ -55,6 +57,9 @@ def on_press(key):
         running = False
     elif key == 's' and start_signal == True:
         should_toggle_recording = True
+    elif key == 'h' and start_signal == True:
+        should_reconnect_hands = True
+        logger_mp.info("Hand reconnect signal received (key 'h')")
     else:
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
 listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
@@ -387,6 +392,9 @@ if __name__ == '__main__':
                         publish_reset_category(2, reset_pose_publisher)
                 elif key == ord('s'):
                     should_toggle_recording = True
+                elif key == ord('h'):
+                    should_reconnect_hands = True
+                    logger_mp.info("Hand reconnect signal received (key 'h' in window)")
                 elif key == ord('a'):
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
@@ -397,13 +405,38 @@ if __name__ == '__main__':
                     recorder.start_recording()
                     recording_frame_accumulator = 0.0  # Reset accumulator for new recording
                     is_recording = True
-                    logger_mp.info(f"==> Recording started (at {args.recording_frequency}Hz)")
+                    logger_mp.info("=" * 40)
+                    logger_mp.info(f"🔴 RECORDING STARTED")
+                    logger_mp.info(f"   Frequency: {args.recording_frequency}Hz")
+                    logger_mp.info(f"   Press 's' to stop recording")
+                    logger_mp.info("=" * 40)
                 else:
+                    # Show episode info before saving
+                    episode_length = recorder.get_current_length()
+                    logger_mp.info("=" * 40)
+                    logger_mp.info(f"⏹️  STOPPING RECORDING")
+                    logger_mp.info(f"   Timesteps: {episode_length}")
+                    logger_mp.info(f"   Duration: {episode_length / args.recording_frequency:.1f}s")
+                    logger_mp.info("=" * 40)
                     recorder.stop_recording()
                     is_recording = False
-                    logger_mp.info("==> Recording stopped and saved")
+                    logger_mp.info("✅ Recording saved successfully!")
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
+            
+            # Handle hand reconnect request
+            if should_reconnect_hands:
+                should_reconnect_hands = False
+                if args.ee == "inspire1" and args.inspire_bridge:
+                    if hasattr(hand_ctrl, 'request_reconnect'):
+                        success_left, success_right = hand_ctrl.request_reconnect()
+                        status = hand_ctrl.get_connection_status()
+                        logger_mp.info(f"Hand connection status - Left: {status['left']}, Right: {status['right']}")
+                    else:
+                        logger_mp.warning("Hand controller doesn't support reconnect (missing request_reconnect method)")
+                else:
+                    logger_mp.info("Hand reconnect only available for inspire bridge mode (--inspire-bridge flag)")
+        
             # get input data
             tele_data = tv_wrapper.get_motion_state_data()
             if (args.ee == "dex3" or args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
@@ -540,6 +573,16 @@ if __name__ == '__main__':
                 logger_mp.info("SAVING EPISODE: Please wait, this may take 30-60 seconds...")
                 logger_mp.info("DO NOT interrupt or data will be lost!")
                 logger_mp.info("=" * 60)
+                
+                # Show episode statistics before saving
+                episode_length = recorder.get_current_length()
+                estimated_size_mb = episode_length * 0.5  # Rough estimate: 0.5MB per timestep
+                logger_mp.info(f"Episode statistics:")
+                logger_mp.info(f"  - Timesteps: {episode_length}")
+                logger_mp.info(f"  - Duration: {episode_length / args.recording_frequency:.1f} seconds")
+                logger_mp.info(f"  - Estimated size: ~{estimated_size_mb:.1f} MB")
+                logger_mp.info("")
+                
                 recorder.stop_recording()
                 logger_mp.info("=" * 60)
                 logger_mp.info("EPISODE SAVED SUCCESSFULLY!")
