@@ -248,8 +248,13 @@ is_paused = False  # Paused state between episodes (robot at reset pose, waiting
 should_force_resume = False  # Manual override to force resume tracking
 should_reconnect_hands = False  # Request to reconnect inspire hands
 
+# Waist yaw control via keyboard (G1 only)
+# Delta is accumulated between main loop iterations
+waist_yaw_delta = 0.0
+WAIST_YAW_STEP = 0.05  # ~3 degrees per key press
+
 def on_press(key):
-    global running, start_signal, should_toggle_recording, should_force_resume, should_reconnect_hands
+    global running, start_signal, should_toggle_recording, should_force_resume, should_reconnect_hands, waist_yaw_delta
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
@@ -267,6 +272,12 @@ def on_press(key):
     elif key == 'h' and start_signal == True:
         should_reconnect_hands = True
         logger_mp.info("Hand reconnect signal received (key 'h')")
+    elif key == 'left' and start_signal == True:
+        waist_yaw_delta -= WAIST_YAW_STEP
+        logger_mp.info(f"Waist yaw: LEFT pressed (delta={waist_yaw_delta:.3f} rad)")
+    elif key == 'right' and start_signal == True:
+        waist_yaw_delta += WAIST_YAW_STEP
+        logger_mp.info(f"Waist yaw: RIGHT pressed (delta={waist_yaw_delta:.3f} rad)")
     else:
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
 listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
@@ -688,17 +699,21 @@ if __name__ == '__main__':
                     logger_mp.info(f"[ROBOT CMD] IK solved in {(time_ik_end - time_ik_start)*1000:.1f}ms, "
                                   f"L=[{sol_q[0]:.2f},{sol_q[1]:.2f},{sol_q[2]:.2f}...] "
                                   f"R=[{sol_q[7]:.2f},{sol_q[8]:.2f},{sol_q[9]:.2f}...]")
+            
+            # Apply waist yaw control from keyboard (G1 only)
+            if args.arm in ['G1_29', 'G1_23'] and waist_yaw_delta != 0.0:
+                current_waist_yaw = arm_ctrl.get_waist_yaw_target()
+                new_waist_yaw = current_waist_yaw + waist_yaw_delta
+                arm_ctrl.ctrl_waist_yaw(new_waist_yaw)
+                if args.debug:
+                    logger_mp.info(f"[WAIST] yaw: {current_waist_yaw:.3f} -> {new_waist_yaw:.3f} rad")
+                waist_yaw_delta = 0.0  # Reset delta after applying
 
-            # Debug locomotion state (works even when not recording)
-            if args.debug and args.motion and not is_recording:
-                lowstate_raw = arm_ctrl.get_lowstate_raw()
-                if lowstate_raw is not None:
-                    loco_state_dbg, loco_action_dbg = parse_lowstate_to_loco_data(lowstate_raw, robot_type=args.arm)
-                    if loco_state_dbg is not None:
-                        ctrl = loco_action_dbg
-                        logger_mp.info(f"[LOCO DEBUG] mode={int(loco_state_dbg[0])} "
-                                      f"rpy=({loco_state_dbg[1]:.2f}, {loco_state_dbg[2]:.2f}, {loco_state_dbg[3]:.2f}) "
-                                      f"ctrl: L=({ctrl[0]:.2f},{ctrl[1]:.2f}) R=({ctrl[2]:.2f},{ctrl[3]:.2f})")
+            # Debug waist yaw state (works even when not recording, G1 only)
+            if args.debug and args.arm in ['G1_29', 'G1_23'] and not is_recording:
+                waist_yaw_current = arm_ctrl.get_current_waist_yaw()
+                waist_yaw_target = arm_ctrl.get_waist_yaw_target()
+                logger_mp.info(f"[WAIST DEBUG] current={waist_yaw_current:.3f} rad, target={waist_yaw_target:.3f} rad")
 
             # record data
             if args.record and is_recording:
@@ -720,25 +735,19 @@ if __name__ == '__main__':
                     hand_action = np.array([])
                 
                 # Combine arm and hand states into full qpos/qvel/action
-                full_qpos = np.concatenate([current_lr_arm_q, hand_state])
-                full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])  # Hand velocities not available
-                full_action = np.concatenate([sol_q, hand_action])
-                
-                # Get locomotion state if in motion mode (from lowstate via arm controller)
-                loco_state = None
-                loco_action = None
-                if args.motion:
-                    lowstate_raw = arm_ctrl.get_lowstate_raw()
-                    loco_state, loco_action = parse_lowstate_to_loco_data(lowstate_raw, robot_type=args.arm)
-                    
-                    # Debug output for locomotion data
-                    if args.debug and loco_state is not None:
-                        # Parse controller inputs for debug display
-                        ctrl = loco_action
-                        logger_mp.info(f"[LOCO] mode={int(loco_state[0])} "
-                                      f"rpy=({loco_state[1]:.2f}, {loco_state[2]:.2f}, {loco_state[3]:.2f}) "
-                                      f"gyro=({loco_state[11]:.2f}, {loco_state[12]:.2f}, {loco_state[13]:.2f}) "
-                                      f"ctrl: L=({ctrl[0]:.2f},{ctrl[1]:.2f}) R=({ctrl[2]:.2f},{ctrl[3]:.2f})")
+                # For G1 robots, also include waist yaw as the last joint
+                if args.arm in ['G1_29', 'G1_23']:
+                    waist_yaw_state = arm_ctrl.get_current_waist_yaw()
+                    waist_yaw_target = arm_ctrl.get_waist_yaw_target()
+                    full_qpos = np.concatenate([current_lr_arm_q, hand_state, [waist_yaw_state]])
+                    full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state), [0.0]])  # Waist vel not tracked
+                    full_action = np.concatenate([sol_q, hand_action, [waist_yaw_target]])
+                    if args.debug:
+                        logger_mp.info(f"[WAIST] state={waist_yaw_state:.3f} rad, target={waist_yaw_target:.3f} rad")
+                else:
+                    full_qpos = np.concatenate([current_lr_arm_q, hand_state])
+                    full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])
+                    full_action = np.concatenate([sol_q, hand_action])
                 
                 # Prepare camera images in msc_humanoid_visual format
                 # IMPORTANT: Use .copy() to ensure each frame is stored independently
@@ -763,9 +772,7 @@ if __name__ == '__main__':
                     qpos=full_qpos,
                     qvel=full_qvel,
                     action=full_action,
-                    images=images,
-                    loco_state=loco_state,
-                    loco_action=loco_action
+                    images=images
                 )
 
             current_time = time.time()

@@ -67,10 +67,10 @@ class Dex3_1_Controller:
             self.hand_retargeting = HandRetargeting(HandType.UNITREE_DEX3_Unit_Test)
 
         if not dds_already_initialized:
-            if self.simulation_mode:
-                ChannelFactoryInitialize(1)
-            else:
-                ChannelFactoryInitialize(0)
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
+            ChannelFactoryInitialize(0)
         else:
             logger_mp.info("[Dex3_1_Controller] DDS already initialized, skipping ChannelFactoryInitialize")
 
@@ -287,10 +287,10 @@ class Dex1_1_Gripper_Controller:
             self.smooth_filter = None
 
         if not dds_already_initialized:
-            if self.simulation_mode:
-                ChannelFactoryInitialize(1)
-            else:
-                ChannelFactoryInitialize(0)
+        if self.simulation_mode:
+            ChannelFactoryInitialize(1)
+        else:
+            ChannelFactoryInitialize(0)
         else:
             logger_mp.info("[Dex1_1_Gripper_Controller] DDS already initialized, skipping ChannelFactoryInitialize")
  

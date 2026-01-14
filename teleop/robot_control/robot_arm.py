@@ -72,6 +72,13 @@ class G1_29_ArmController:
         self.kd_low = 3.0
         self.kp_wrist = 40.0
         self.kd_wrist = 1.5
+        
+        # Waist yaw control parameters (per Unitree SDK2 example: kp=60, kd=1.5)
+        self.kp_waist = 60.0
+        self.kd_waist = 1.5
+        self.waist_yaw_target = 0.0  # Will be initialized from current position
+        self.waist_yaw_limit_min = -2.618  # From URDF: -150 degrees
+        self.waist_yaw_limit_max = 2.618   # From URDF: +150 degrees
 
         self.all_motor_q = None
         self.arm_velocity_limit = 20.0
@@ -119,7 +126,12 @@ class G1_29_ArmController:
         self.all_motor_q = self.get_current_motor_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        logger_mp.info("Lock all joints except two arms...\n")
+        
+        # Initialize waist yaw target from current position
+        self.waist_yaw_target = self.all_motor_q[G1_29_JointIndex.kWaistYaw]
+        logger_mp.info(f"Initial waist yaw: {self.waist_yaw_target:.3f} rad")
+        
+        logger_mp.info("Lock all joints except two arms and waist yaw...\n")
 
         arm_indices = set(member.value for member in G1_29_JointArmIndex)
         for id in G1_29_JointIndex:
@@ -131,6 +143,10 @@ class G1_29_ArmController:
                 else:
                     self.msg.motor_cmd[id].kp = self.kp_low
                     self.msg.motor_cmd[id].kd = self.kd_low
+            elif id == G1_29_JointIndex.kWaistYaw:
+                # Waist yaw gets special PD gains for keyboard control
+                self.msg.motor_cmd[id].kp = self.kp_waist
+                self.msg.motor_cmd[id].kd = self.kd_waist
             else:
                 if self._Is_weak_motor(id):
                     self.msg.motor_cmd[id].kp = self.kp_low
@@ -177,6 +193,7 @@ class G1_29_ArmController:
             with self.ctrl_lock:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
+                waist_yaw_target = self.waist_yaw_target
 
             if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
@@ -186,7 +203,12 @@ class G1_29_ArmController:
             for idx, id in enumerate(G1_29_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
                 self.msg.motor_cmd[id].dq = 0
-                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]   
+                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]
+            
+            # Command waist yaw (controlled via keyboard)
+            self.msg.motor_cmd[G1_29_JointIndex.kWaistYaw].q = waist_yaw_target
+            self.msg.motor_cmd[G1_29_JointIndex.kWaistYaw].dq = 0
+            self.msg.motor_cmd[G1_29_JointIndex.kWaistYaw].tau = 0
 
             self.msg.crc = self.crc.Crc(self.msg)
             self.lowcmd_publisher.Write(self.msg)
@@ -207,6 +229,21 @@ class G1_29_ArmController:
         with self.ctrl_lock:
             self.q_target = q_target
             self.tauff_target = tauff_target
+    
+    def ctrl_waist_yaw(self, yaw_target):
+        '''Set waist yaw target angle (radians). Clamped to joint limits.'''
+        clamped = np.clip(yaw_target, self.waist_yaw_limit_min, self.waist_yaw_limit_max)
+        with self.ctrl_lock:
+            self.waist_yaw_target = clamped
+    
+    def get_current_waist_yaw(self):
+        '''Return current waist yaw angle (radians).'''
+        return self.lowstate_buffer.GetData().motor_state[G1_29_JointIndex.kWaistYaw].q
+    
+    def get_waist_yaw_target(self):
+        '''Return current waist yaw target (radians).'''
+        with self.ctrl_lock:
+            return self.waist_yaw_target
 
     def get_mode_machine(self):
         '''Return current dds mode machine.'''
@@ -369,6 +406,13 @@ class G1_23_ArmController:
         self.kd_low = 3.0
         self.kp_wrist = 50.0
         self.kd_wrist = 2.0
+        
+        # Waist yaw control parameters (per Unitree SDK2 example: kp=60, kd=1.5)
+        self.kp_waist = 60.0
+        self.kd_waist = 1.5
+        self.waist_yaw_target = 0.0  # Will be initialized from current position
+        self.waist_yaw_limit_min = -2.618  # From URDF: -150 degrees
+        self.waist_yaw_limit_max = 2.618   # From URDF: +150 degrees
 
         self.all_motor_q = None
         self.arm_velocity_limit = 20.0
@@ -416,7 +460,12 @@ class G1_23_ArmController:
         self.all_motor_q = self.get_current_motor_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        logger_mp.info("Lock all joints except two arms...\n")
+        
+        # Initialize waist yaw target from current position
+        self.waist_yaw_target = self.all_motor_q[G1_23_JointIndex.kWaistYaw]
+        logger_mp.info(f"Initial waist yaw: {self.waist_yaw_target:.3f} rad")
+        
+        logger_mp.info("Lock all joints except two arms and waist yaw...\n")
 
         arm_indices = set(member.value for member in G1_23_JointArmIndex)
         for id in G1_23_JointIndex:
@@ -428,6 +477,10 @@ class G1_23_ArmController:
                 else:
                     self.msg.motor_cmd[id].kp = self.kp_low
                     self.msg.motor_cmd[id].kd = self.kd_low
+            elif id == G1_23_JointIndex.kWaistYaw:
+                # Waist yaw gets special PD gains for keyboard control
+                self.msg.motor_cmd[id].kp = self.kp_waist
+                self.msg.motor_cmd[id].kd = self.kd_waist
             else:
                 if self._Is_weak_motor(id):
                     self.msg.motor_cmd[id].kp = self.kp_low
@@ -474,6 +527,7 @@ class G1_23_ArmController:
             with self.ctrl_lock:
                 arm_q_target     = self.q_target
                 arm_tauff_target = self.tauff_target
+                waist_yaw_target = self.waist_yaw_target
 
             if self.simulation_mode:
                 cliped_arm_q_target = arm_q_target
@@ -483,7 +537,12 @@ class G1_23_ArmController:
             for idx, id in enumerate(G1_23_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
                 self.msg.motor_cmd[id].dq = 0
-                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]      
+                self.msg.motor_cmd[id].tau = arm_tauff_target[idx]
+            
+            # Command waist yaw (controlled via keyboard)
+            self.msg.motor_cmd[G1_23_JointIndex.kWaistYaw].q = waist_yaw_target
+            self.msg.motor_cmd[G1_23_JointIndex.kWaistYaw].dq = 0
+            self.msg.motor_cmd[G1_23_JointIndex.kWaistYaw].tau = 0
 
             self.msg.crc = self.crc.Crc(self.msg)
             self.lowcmd_publisher.Write(self.msg)
@@ -504,6 +563,21 @@ class G1_23_ArmController:
         with self.ctrl_lock:
             self.q_target = q_target
             self.tauff_target = tauff_target
+    
+    def ctrl_waist_yaw(self, yaw_target):
+        '''Set waist yaw target angle (radians). Clamped to joint limits.'''
+        clamped = np.clip(yaw_target, self.waist_yaw_limit_min, self.waist_yaw_limit_max)
+        with self.ctrl_lock:
+            self.waist_yaw_target = clamped
+    
+    def get_current_waist_yaw(self):
+        '''Return current waist yaw angle (radians).'''
+        return self.lowstate_buffer.GetData().motor_state[G1_23_JointIndex.kWaistYaw].q
+    
+    def get_waist_yaw_target(self):
+        '''Return current waist yaw target (radians).'''
+        with self.ctrl_lock:
+            return self.waist_yaw_target
 
     def get_mode_machine(self):
         '''Return current dds mode machine.'''
