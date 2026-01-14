@@ -249,14 +249,14 @@ should_force_resume = False  # Manual override to force resume tracking
 should_reconnect_hands = False  # Request to reconnect inspire hands
 
 # Waist yaw control via keyboard (G1 only)
-# Track whether arrow keys are held down for continuous rotation
-waist_yaw_left_held = False
-waist_yaw_right_held = False
-WAIST_YAW_SPEED = 0.02  # radians per loop iteration (~1.1 deg at 30Hz, ~0.6 deg/s continuous)
+# Use toggle approach instead of held keys (on_release causes TeleVuer issues)
+# Press LEFT to start/stop turning right, press RIGHT to start/stop turning left
+waist_yaw_direction = 0  # -1 = turning left, 0 = stopped, +1 = turning right
+WAIST_YAW_SPEED = 0.02  # radians per loop iteration (~1.1 deg at 30Hz)
 
 def on_press(key):
     global running, start_signal, should_toggle_recording, should_force_resume, should_reconnect_hands
-    global waist_yaw_left_held, waist_yaw_right_held
+    global waist_yaw_direction
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
@@ -275,18 +275,16 @@ def on_press(key):
         should_reconnect_hands = True
         logger_mp.info("Hand reconnect signal received (key 'h')")
     elif key == 'left' and start_signal == True:
-        waist_yaw_left_held = True
+        # Toggle: press to start turning right (positive yaw), press again to stop
+        waist_yaw_direction = WAIST_YAW_SPEED if waist_yaw_direction <= 0 else 0
+        logger_mp.info(f"Waist yaw: {'turning RIGHT' if waist_yaw_direction > 0 else 'STOPPED'}")
     elif key == 'right' and start_signal == True:
-        waist_yaw_right_held = True
+        # Toggle: press to start turning left (negative yaw), press again to stop
+        waist_yaw_direction = -WAIST_YAW_SPEED if waist_yaw_direction >= 0 else 0
+        logger_mp.info(f"Waist yaw: {'turning LEFT' if waist_yaw_direction < 0 else 'STOPPED'}")
 
-def on_release(key):
-    global waist_yaw_left_held, waist_yaw_right_held
-    if key == 'left':
-        waist_yaw_left_held = False
-    elif key == 'right':
-        waist_yaw_right_held = False
-
-listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "on_release": on_release, "until": None, "sequential": False,}, daemon=True)
+# NOTE: Do NOT use on_release callback - it breaks TeleVuer subprocess communication
+listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
 listen_keyboard_thread.start()
 
 if __name__ == '__main__':
@@ -706,16 +704,12 @@ if __name__ == '__main__':
                                   f"L=[{sol_q[0]:.2f},{sol_q[1]:.2f},{sol_q[2]:.2f}...] "
                                   f"R=[{sol_q[7]:.2f},{sol_q[8]:.2f},{sol_q[9]:.2f}...]")
             
-            # Apply waist yaw control from keyboard (G1 only) - continuous while held
-            # LEFT arrow = rotate right (positive yaw), RIGHT arrow = rotate left (negative yaw)
-            if args.arm in ['G1_29', 'G1_23'] and (waist_yaw_left_held or waist_yaw_right_held):
+            # Apply waist yaw control from keyboard (G1 only) - toggle based
+            # LEFT arrow = start/stop rotating right (positive yaw)
+            # RIGHT arrow = start/stop rotating left (negative yaw)
+            if args.arm in ['G1_29', 'G1_23'] and waist_yaw_direction != 0:
                 current_waist_yaw = arm_ctrl.get_waist_yaw_target()
-                delta = 0.0
-                if waist_yaw_left_held:
-                    delta += WAIST_YAW_SPEED  # Inverted: left key = positive yaw
-                if waist_yaw_right_held:
-                    delta -= WAIST_YAW_SPEED  # Inverted: right key = negative yaw
-                new_waist_yaw = current_waist_yaw + delta
+                new_waist_yaw = current_waist_yaw + waist_yaw_direction
                 arm_ctrl.ctrl_waist_yaw(new_waist_yaw)
 
             # Debug waist yaw state (works even when not recording, G1 only)
