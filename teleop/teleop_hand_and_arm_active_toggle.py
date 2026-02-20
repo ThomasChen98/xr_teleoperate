@@ -10,6 +10,10 @@ import logging_mp
 import numpy as np
 from sshkeyboard import listen_keyboard, stop_listening
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 from televuer import TeleVuerWrapper
 from teleop.image_server.image_client import ImageClient
 from teleop.robot_control.robot_arm import (
@@ -31,10 +35,6 @@ from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 
 logging_mp.basic_config(level=logging_mp.INFO)
 logger_mp = logging_mp.get_logger(__name__)
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
 
 
 POSE_MATCH_THRESHOLD_RAD = np.deg2rad(30)
