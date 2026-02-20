@@ -60,18 +60,20 @@ class EpisodeWriterHDF5:
         self.qvel_buffer = []
         self.action_buffer = []
         self.image_buffers = {}  # {camera_name: [frames]}
+        self.recording_metadata = {}
         
         self.recording = False
         
         logger_mp.info(f"EpisodeWriterHDF5 initialized: {self.filepath}")
     
-    def start_recording(self):
+    def start_recording(self, metadata=None):
         """Start a new episode recording"""
         self.recording = True
         self.qpos_buffer = []
         self.qvel_buffer = []
         self.action_buffer = []
         self.image_buffers = {}
+        self.recording_metadata = dict(metadata or {})
         logger_mp.info(f"Started recording episode {self.episode_idx}")
     
     def add_timestep(self, qpos, qvel, action, images=None):
@@ -87,9 +89,19 @@ class EpisodeWriterHDF5:
         if not self.recording:
             return
         
-        self.qpos_buffer.append(np.array(qpos, dtype=np.float32))
-        self.qvel_buffer.append(np.array(qvel, dtype=np.float32))
-        self.action_buffer.append(np.array(action, dtype=np.float32))
+        qpos_arr = np.array(qpos, dtype=np.float32)
+        qvel_arr = np.array(qvel, dtype=np.float32)
+        action_arr = np.array(action, dtype=np.float32)
+
+        if qpos_arr.ndim != 1 or qvel_arr.ndim != 1 or action_arr.ndim != 1:
+            logger_mp.error(
+                f"Expected 1D vectors, got qpos={qpos_arr.shape}, qvel={qvel_arr.shape}, action={action_arr.shape}"
+            )
+            return
+
+        self.qpos_buffer.append(qpos_arr)
+        self.qvel_buffer.append(qvel_arr)
+        self.action_buffer.append(action_arr)
         
         if images is not None:
             for camera_name, image in images.items():
@@ -166,6 +178,8 @@ class EpisodeWriterHDF5:
                 f.attrs['fps'] = self.fps
                 f.attrs['robot_name'] = self.robot_name
                 f.attrs['timestamp'] = datetime.now().isoformat()
+                for key, value in self.recording_metadata.items():
+                    f.attrs[key] = value
                 logger_mp.info(f"  Saved metadata: episode_length={episode_length}, fps={self.fps}, robot={self.robot_name}")
             
             logger_mp.info(f"Episode saved successfully: {self.filepath}")
