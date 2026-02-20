@@ -23,9 +23,6 @@ from teleop.robot_control.robot_arm import (
     H1_ArmController,
 )
 from teleop.robot_control.robot_arm_ik import G1_23_ArmIK, G1_29_ArmIK, H1_2_ArmIK, H1_ArmIK
-from teleop.robot_control.robot_hand_brainco import Brainco_Controller
-from teleop.robot_control.robot_hand_inspire import Inspire_Controller
-from teleop.robot_control.robot_hand_inspire_bridge import Inspire_Bridge_Controller
 from teleop.robot_control.robot_hand_unitree import Dex1_1_Gripper_Controller, Dex3_1_Controller
 from teleop.utils.episode_writer_hdf5 import EpisodeWriterHDF5
 
@@ -308,12 +305,16 @@ if __name__ == "__main__":
             dds_already_initialized=True,
         )
     elif args.ee == "inspire1":
+        from teleop.robot_control.robot_hand_inspire import Inspire_Controller
+
         left_hand_pos_array = Array("d", 75, lock=True)
         right_hand_pos_array = Array("d", 75, lock=True)
         dual_hand_data_lock = Lock()
         dual_hand_state_array = Array("d", 12, lock=False)
         dual_hand_action_array = Array("d", 12, lock=False)
         if args.inspire_bridge:
+            from teleop.robot_control.robot_hand_inspire_bridge import Inspire_Bridge_Controller
+
             hand_ctrl = Inspire_Bridge_Controller(
                 left_hand_pos_array,
                 right_hand_pos_array,
@@ -330,6 +331,8 @@ if __name__ == "__main__":
                 left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array
             )
     elif args.ee == "brainco":
+        from teleop.robot_control.robot_hand_brainco import Brainco_Controller
+
         left_hand_pos_array = Array("d", 75, lock=True)
         right_hand_pos_array = Array("d", 75, lock=True)
         dual_hand_data_lock = Lock()
