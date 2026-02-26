@@ -276,8 +276,8 @@ class Dex3BinaryController:
     LEFT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     RIGHT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     # Keep thumb yaw neutral (joint0=0.0) and close thumb inward with joints 1/2.
-    LEFT_CLOSE_Q = np.array([0.0, 0.7, 0.9, -1.5, -1.5, -0.6, -1.5], dtype=np.float32)
-    RIGHT_CLOSE_Q = np.array([0.0, -0.7, -0.9, 1.5, 1.5, 0.6, 1.5], dtype=np.float32)
+    LEFT_CLOSE_Q = np.array([0.0, 1, 1, -1.5, -1.5, -1.5, -1.5], dtype=np.float32)
+    RIGHT_CLOSE_Q = np.array([0.0, -1, -1, 1.5, 1.5, 1.5, 1.5], dtype=np.float32)
 
     def __init__(self, simulation_mode=False):
         if not DEX3_BINARY_AVAILABLE:
