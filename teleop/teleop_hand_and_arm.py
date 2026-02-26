@@ -272,6 +272,11 @@ def build_franka16_binary_vectors(arm_q, arm_dq, arm_action, left_grasp, right_g
 
 class Dex3BinaryController:
     """Direct dex3 command publisher for controller-mode binary open/close."""
+    # GR00T-style claw presets for G1 + Dex3 (7DoF per hand).
+    LEFT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    RIGHT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    LEFT_CLOSE_Q = np.array([-0.5, 0.7, 0.7, -1.5, -1.5, -0.6, -1.5], dtype=np.float32)
+    RIGHT_CLOSE_Q = np.array([-0.5, -0.7, -0.7, 1.5, 1.5, 0.6, 1.5], dtype=np.float32)
 
     def __init__(self, simulation_mode=False):
         if not DEX3_BINARY_AVAILABLE:
@@ -305,12 +310,12 @@ class Dex3BinaryController:
             msg.motor_cmd[joint_id].kp = kp
             msg.motor_cmd[joint_id].kd = kd
 
-    def ctrl_binary(self, left_close, right_close, open_q, close_q):
-        left_target = close_q if left_close >= 0.5 else open_q
-        right_target = close_q if right_close >= 0.5 else open_q
+    def ctrl_binary(self, left_close, right_close):
+        left_target = self.LEFT_CLOSE_Q if left_close >= 0.5 else self.LEFT_OPEN_Q
+        right_target = self.RIGHT_CLOSE_Q if right_close >= 0.5 else self.RIGHT_OPEN_Q
         for joint_id in range(7):
-            self.left_msg.motor_cmd[joint_id].q = float(left_target)
-            self.right_msg.motor_cmd[joint_id].q = float(right_target)
+            self.left_msg.motor_cmd[joint_id].q = float(left_target[joint_id])
+            self.right_msg.motor_cmd[joint_id].q = float(right_target[joint_id])
         self.left_pub.Write(self.left_msg)
         self.right_pub.Write(self.right_msg)
 
@@ -406,8 +411,6 @@ if __name__ == '__main__':
         default='trigger',
         help='Controller-mode source signal for binary grasp.',
     )
-    parser.add_argument('--dex3-open-q', type=float, default=0.0, help='Dex3 joint target for open binary grasp.')
-    parser.add_argument('--dex3-close-q', type=float, default=1.2, help='Dex3 joint target for close binary grasp.')
 
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
@@ -796,8 +799,6 @@ if __name__ == '__main__':
                     hand_ctrl.ctrl_binary(
                         left_close=left_grasp_binary,
                         right_close=right_grasp_binary,
-                        open_q=args.dex3_open_q,
-                        close_q=args.dex3_close_q,
                     )
             
             # high level control
