@@ -275,8 +275,9 @@ class Dex3BinaryController:
     # GR00T-style claw presets for G1 + Dex3 (7DoF per hand).
     LEFT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     RIGHT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    LEFT_CLOSE_Q = np.array([-0.5, 0.7, 0.7, -1.5, -1.5, -0.6, -1.5], dtype=np.float32)
-    RIGHT_CLOSE_Q = np.array([-0.5, -0.7, -0.7, 1.5, 1.5, 0.6, 1.5], dtype=np.float32)
+    # Keep thumb yaw neutral (joint0=0.0) and close thumb inward with joints 1/2.
+    LEFT_CLOSE_Q = np.array([0.0, 0.7, 0.9, -1.5, -1.5, -0.6, -1.5], dtype=np.float32)
+    RIGHT_CLOSE_Q = np.array([0.0, -0.7, -0.9, 1.5, 1.5, 0.6, 1.5], dtype=np.float32)
 
     def __init__(self, simulation_mode=False):
         if not DEX3_BINARY_AVAILABLE:
@@ -779,8 +780,10 @@ if __name__ == '__main__':
                     left_signal = float(tele_data.left_pinch_value)
                     right_signal = float(tele_data.right_pinch_value)
                 else:
-                    left_signal = float(tele_data.left_trigger_value)
-                    right_signal = float(tele_data.right_trigger_value)
+                    # On some controller stacks trigger is reported high at rest.
+                    # Invert so: not pressed -> open, pressed -> close.
+                    left_signal = 1.0 - float(tele_data.left_trigger_value)
+                    right_signal = 1.0 - float(tele_data.right_trigger_value)
 
                 left_grasp_binary = update_binary_grasp(
                     left_signal,
