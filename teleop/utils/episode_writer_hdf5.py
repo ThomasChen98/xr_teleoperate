@@ -33,7 +33,14 @@ logger_mp = logging_mp.get_logger(__name__)
 
 
 class EpisodeWriterHDF5:
-    def __init__(self, save_dir='./utils/data/', robot_name='robot', fps=60):
+    def __init__(
+        self,
+        save_dir='./utils/data/',
+        robot_name='robot',
+        fps=60,
+        run_name=None,
+        create_run_subdir=True,
+    ):
         """
         Initialize HDF5 episode writer for msc_humanoid_visual compatible format
         
@@ -42,18 +49,24 @@ class EpisodeWriterHDF5:
             robot_name: Name of the robot (e.g., 'H1_2', 'G1_29')
             fps: Recording frequency in Hz
         """
-        self.save_dir = save_dir
+        self.base_save_dir = save_dir
         self.robot_name = robot_name
         self.fps = fps
-        
-        os.makedirs(save_dir, exist_ok=True)
+        if create_run_subdir:
+            if run_name is None:
+                run_name = datetime.now().strftime("run_%Y%m%d_%H%M%S")
+            self.save_dir = os.path.join(save_dir, run_name)
+        else:
+            self.save_dir = save_dir
+
+        os.makedirs(self.save_dir, exist_ok=True)
         
         # Find next episode number
         self.episode_idx = 0
-        while os.path.exists(os.path.join(save_dir, f'episode_{self.episode_idx}.hdf5')):
+        while os.path.exists(os.path.join(self.save_dir, f'episode_{self.episode_idx}.hdf5')):
             self.episode_idx += 1
         
-        self.filepath = os.path.join(save_dir, f'episode_{self.episode_idx}.hdf5')
+        self.filepath = os.path.join(self.save_dir, f'episode_{self.episode_idx}.hdf5')
         
         # Data buffers
         self.qpos_buffer = []
@@ -73,7 +86,7 @@ class EpisodeWriterHDF5:
         self.qvel_buffer = []
         self.action_buffer = []
         self.image_buffers = {}
-        self.recording_metadata = dict(metadata or {})
+        self.recording_metadata = {k: v for k, v in dict(metadata or {}).items() if v is not None}
         logger_mp.info(f"Started recording episode {self.episode_idx}")
     
     def add_timestep(self, qpos, qvel, action, images=None):
@@ -178,6 +191,9 @@ class EpisodeWriterHDF5:
                 f.attrs['fps'] = self.fps
                 f.attrs['robot_name'] = self.robot_name
                 f.attrs['timestamp'] = datetime.now().isoformat()
+                f.attrs['save_dir'] = self.save_dir
+                f.attrs['action_dim'] = int(action_data.shape[1])
+                f.attrs['state_dim'] = int(qpos_data.shape[1])
                 for key, value in self.recording_metadata.items():
                     f.attrs[key] = value
                 logger_mp.info(f"  Saved metadata: episode_length={episode_length}, fps={self.fps}, robot={self.robot_name}")

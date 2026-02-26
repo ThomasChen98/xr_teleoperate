@@ -31,6 +31,12 @@ from sshkeyboard import listen_keyboard, stop_listening
 # for simulation
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
+try:
+    from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
+    from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_
+    DEX3_BINARY_AVAILABLE = True
+except Exception:
+    DEX3_BINARY_AVAILABLE = False
 # Note: Locomotion data is extracted from lowstate (via arm controller) - no separate subscription needed
 def publish_reset_category(category: int,publisher): # Scene Reset signal
     msg = String_(data=str(category))
@@ -239,6 +245,78 @@ def check_arm_pose_match(user_arm_q, reset_arm_q, threshold_rad):
     is_matched = np.all(diff < threshold_rad)
     return is_matched, max_diff_deg
 
+
+def update_binary_grasp(value, previous_state, open_threshold, close_threshold):
+    """Apply hysteresis to compute stable binary grasp state."""
+    if value >= close_threshold:
+        return 1.0
+    if value <= open_threshold:
+        return 0.0
+    return previous_state
+
+
+def build_franka16_binary_vectors(arm_q, arm_dq, arm_action, left_grasp, right_grasp):
+    """Build canonical 16D [L7, R7, Lgrasp, Rgrasp] vectors."""
+    qpos = np.zeros(16, dtype=np.float32)
+    qvel = np.zeros(16, dtype=np.float32)
+    action = np.zeros(16, dtype=np.float32)
+    qpos[:14] = np.asarray(arm_q, dtype=np.float32)[:14]
+    qvel[:14] = np.asarray(arm_dq, dtype=np.float32)[:14]
+    action[:14] = np.asarray(arm_action, dtype=np.float32)[:14]
+    qpos[14] = np.float32(left_grasp)
+    qpos[15] = np.float32(right_grasp)
+    action[14] = np.float32(left_grasp)
+    action[15] = np.float32(right_grasp)
+    return qpos, qvel, action
+
+
+class Dex3BinaryController:
+    """Direct dex3 command publisher for controller-mode binary open/close."""
+
+    def __init__(self, simulation_mode=False):
+        if not DEX3_BINARY_AVAILABLE:
+            raise RuntimeError("Dex3 binary controller requires unitree_hg HandCmd messages")
+        from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+
+        ChannelFactoryInitialize(1 if simulation_mode else 0)
+        self.left_pub = ChannelPublisher("rt/dex3/left/cmd", HandCmd_)
+        self.left_pub.Init()
+        self.right_pub = ChannelPublisher("rt/dex3/right/cmd", HandCmd_)
+        self.right_pub.Init()
+
+        self.left_msg = unitree_hg_msg_dds__HandCmd_()
+        self.right_msg = unitree_hg_msg_dds__HandCmd_()
+        self._init_msg(self.left_msg)
+        self._init_msg(self.right_msg)
+
+    @staticmethod
+    def _init_msg(msg):
+        q = 0.0
+        dq = 0.0
+        tau = 0.0
+        kp = 1.5
+        kd = 0.2
+        for joint_id in range(7):
+            mode = (joint_id & 0x0F) | ((0x01 & 0x07) << 4)
+            msg.motor_cmd[joint_id].mode = mode
+            msg.motor_cmd[joint_id].q = q
+            msg.motor_cmd[joint_id].dq = dq
+            msg.motor_cmd[joint_id].tau = tau
+            msg.motor_cmd[joint_id].kp = kp
+            msg.motor_cmd[joint_id].kd = kd
+
+    def ctrl_binary(self, left_close, right_close, open_q, close_q):
+        left_target = close_q if left_close >= 0.5 else open_q
+        right_target = close_q if right_close >= 0.5 else open_q
+        for joint_id in range(7):
+            self.left_msg.motor_cmd[joint_id].q = float(left_target)
+            self.right_msg.motor_cmd[joint_id].q = float(right_target)
+        self.left_pub.Write(self.left_msg)
+        self.right_pub.Write(self.right_msg)
+
+    def stop(self):
+        return
+
 # state transition
 start_signal = False
 running = True
@@ -312,9 +390,36 @@ if __name__ == '__main__':
     
     # debug flags
     parser.add_argument('--debug', action='store_true', help='Enable debug output for locomotion and other data')
+    parser.add_argument(
+        '--save-layout',
+        type=str,
+        choices=['legacy', 'franka16_binary'],
+        default='legacy',
+        help='Recorded qpos/action layout. Use franka16_binary for canonical 16D [L7,R7,Lgrasp,Rgrasp].',
+    )
+    parser.add_argument('--grasp-open-threshold', type=float, default=0.35, help='Hysteresis open threshold for binary grasp.')
+    parser.add_argument('--grasp-close-threshold', type=float, default=0.65, help='Hysteresis close threshold for binary grasp.')
+    parser.add_argument(
+        '--controller-grasp-source',
+        type=str,
+        choices=['trigger', 'pinch'],
+        default='trigger',
+        help='Controller-mode source signal for binary grasp.',
+    )
+    parser.add_argument('--dex3-open-q', type=float, default=0.0, help='Dex3 joint target for open binary grasp.')
+    parser.add_argument('--dex3-close-q', type=float, default=1.2, help='Dex3 joint target for close binary grasp.')
 
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
+    if args.grasp_open_threshold >= args.grasp_close_threshold:
+        raise ValueError("grasp-open-threshold must be < grasp-close-threshold")
+
+    use_franka16_binary = args.save_layout == 'franka16_binary'
+    left_grasp_binary = 0.0
+    right_grasp_binary = 0.0
+    use_dex3_binary_controller = bool(
+        use_franka16_binary and args.xr_mode == "controller" and args.ee == "dex3"
+    )
 
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
     # Image config - head camera only (no wrist cameras)
@@ -419,12 +524,21 @@ if __name__ == '__main__':
 
     # end-effector
     if args.ee == "dex3":
-        left_hand_pos_array = Array('d', 75, lock = True)      # [input]
-        right_hand_pos_array = Array('d', 75, lock = True)     # [input]
-        dual_hand_data_lock = Lock()
-        dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
-        dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
-        hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, dds_already_initialized=True)
+        if use_dex3_binary_controller:
+            logger_mp.info("Using Dex3BinaryController for controller-mode discrete open/close.")
+            hand_ctrl = Dex3BinaryController(simulation_mode=args.sim)
+            left_hand_pos_array = None
+            right_hand_pos_array = None
+            dual_hand_data_lock = None
+            dual_hand_state_array = None
+            dual_hand_action_array = None
+        else:
+            left_hand_pos_array = Array('d', 75, lock = True)      # [input]
+            right_hand_pos_array = Array('d', 75, lock = True)     # [input]
+            dual_hand_data_lock = Lock()
+            dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
+            dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
+            hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, dds_already_initialized=True)
     elif args.ee == "dex1":
         left_gripper_value = Value('d', 0.0, lock=True)        # [input]
         right_gripper_value = Value('d', 0.0, lock=True)       # [input]
@@ -577,7 +691,17 @@ if __name__ == '__main__':
             if args.record and should_toggle_recording:
                 should_toggle_recording = False
                 if not is_recording:
-                    recorder.start_recording()
+                    recorder.start_recording(
+                        metadata={
+                            "data_layout": args.save_layout,
+                            "action_dim": 16 if use_franka16_binary else None,
+                            "state_dim": 16 if use_franka16_binary else None,
+                            "grasp_encoding": "binary" if use_franka16_binary else "continuous",
+                            "grasp_open_threshold": args.grasp_open_threshold if use_franka16_binary else None,
+                            "grasp_close_threshold": args.grasp_close_threshold if use_franka16_binary else None,
+                            "controller_grasp_source": args.controller_grasp_source,
+                        }
+                    )
                     is_recording = True
                     logger_mp.info("==> Recording started")
                 else:
@@ -646,6 +770,35 @@ if __name__ == '__main__':
                     right_gripper_value.value = tele_data.right_pinch_value
             else:
                 pass        
+
+            if args.xr_mode == "controller":
+                if args.controller_grasp_source == "pinch":
+                    left_signal = float(tele_data.left_pinch_value)
+                    right_signal = float(tele_data.right_pinch_value)
+                else:
+                    left_signal = float(tele_data.left_trigger_value)
+                    right_signal = float(tele_data.right_trigger_value)
+
+                left_grasp_binary = update_binary_grasp(
+                    left_signal,
+                    left_grasp_binary,
+                    args.grasp_open_threshold,
+                    args.grasp_close_threshold,
+                )
+                right_grasp_binary = update_binary_grasp(
+                    right_signal,
+                    right_grasp_binary,
+                    args.grasp_open_threshold,
+                    args.grasp_close_threshold,
+                )
+
+                if use_dex3_binary_controller:
+                    hand_ctrl.ctrl_binary(
+                        left_close=left_grasp_binary,
+                        right_close=right_grasp_binary,
+                        open_q=args.dex3_open_q,
+                        close_q=args.dex3_close_q,
+                    )
             
             # high level control
             if args.xr_mode == "controller" and args.motion:
@@ -721,7 +874,7 @@ if __name__ == '__main__':
             # record data
             if args.record and is_recording:
                 # Get hand state and actions
-                if args.ee == "dex3" and args.xr_mode == "hand":
+                if args.ee == "dex3" and args.xr_mode == "hand" and not use_dex3_binary_controller:
                     with dual_hand_data_lock:
                         hand_state = np.array(dual_hand_state_array[:])  # [14] - left+right
                         hand_action = np.array(dual_hand_action_array[:])
@@ -736,21 +889,47 @@ if __name__ == '__main__':
                 else:
                     hand_state = np.array([])
                     hand_action = np.array([])
-                
-                # Combine arm and hand states into full qpos/qvel/action
-                # For G1 robots, also include waist yaw as the last joint
-                if args.arm in ['G1_29', 'G1_23']:
-                    waist_yaw_state = arm_ctrl.get_current_waist_yaw()
-                    waist_yaw_target = arm_ctrl.get_waist_yaw_target()
-                    full_qpos = np.concatenate([current_lr_arm_q, hand_state, [waist_yaw_state]])
-                    full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state), [0.0]])  # Waist vel not tracked
-                    full_action = np.concatenate([sol_q, hand_action, [waist_yaw_target]])
-                    if args.debug:
-                        logger_mp.info(f"[WAIST] state={waist_yaw_state:.3f} rad, target={waist_yaw_target:.3f} rad")
+
+                if use_franka16_binary:
+                    if args.xr_mode != "controller":
+                        # In non-controller mode, infer coarse binary grasp from hand actions if available.
+                        if hand_action.size >= 2:
+                            left_signal = float(np.mean(hand_action[: hand_action.size // 2]))
+                            right_signal = float(np.mean(hand_action[hand_action.size // 2 :]))
+                            left_grasp_binary = update_binary_grasp(
+                                left_signal,
+                                left_grasp_binary,
+                                args.grasp_open_threshold,
+                                args.grasp_close_threshold,
+                            )
+                            right_grasp_binary = update_binary_grasp(
+                                right_signal,
+                                right_grasp_binary,
+                                args.grasp_open_threshold,
+                                args.grasp_close_threshold,
+                            )
+                    full_qpos, full_qvel, full_action = build_franka16_binary_vectors(
+                        current_lr_arm_q,
+                        current_lr_arm_dq,
+                        sol_q,
+                        left_grasp_binary,
+                        right_grasp_binary,
+                    )
                 else:
-                    full_qpos = np.concatenate([current_lr_arm_q, hand_state])
-                    full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])
-                    full_action = np.concatenate([sol_q, hand_action])
+                    # Combine arm and hand states into full qpos/qvel/action
+                    # For G1 robots, also include waist yaw as the last joint
+                    if args.arm in ['G1_29', 'G1_23']:
+                        waist_yaw_state = arm_ctrl.get_current_waist_yaw()
+                        waist_yaw_target = arm_ctrl.get_waist_yaw_target()
+                        full_qpos = np.concatenate([current_lr_arm_q, hand_state, [waist_yaw_state]])
+                        full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state), [0.0]])  # Waist vel not tracked
+                        full_action = np.concatenate([sol_q, hand_action, [waist_yaw_target]])
+                        if args.debug:
+                            logger_mp.info(f"[WAIST] state={waist_yaw_state:.3f} rad, target={waist_yaw_target:.3f} rad")
+                    else:
+                        full_qpos = np.concatenate([current_lr_arm_q, hand_state])
+                        full_qvel = np.concatenate([current_lr_arm_dq, np.zeros_like(hand_state)])
+                        full_action = np.concatenate([sol_q, hand_action])
                 
                 # Prepare camera images in msc_humanoid_visual format
                 # IMPORTANT: Use .copy() to ensure each frame is stored independently
