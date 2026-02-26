@@ -33,7 +33,7 @@ from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 try:
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
-    from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_
+    from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_
     DEX3_BINARY_AVAILABLE = True
 except Exception:
     DEX3_BINARY_AVAILABLE = False
@@ -272,6 +272,16 @@ def build_franka16_binary_vectors(arm_q, arm_dq, arm_action, left_grasp, right_g
 
 class Dex3BinaryController:
     """Direct dex3 command publisher for controller-mode binary open/close."""
+    # Contact-aware adaptive gains:
+    # - use stronger gains for small errors (free-space motion)
+    # - lower gains for large persistent errors (likely rigid-object contact)
+    KP_HIGH = 1.5
+    KD_HIGH = 0.2
+    KP_LOW = 0.55
+    KD_LOW = 0.08
+    ERR_SMALL_RAD = 0.08
+    ERR_LARGE_RAD = 0.45
+
     # GR00T-style claw presets for G1 + Dex3 (7DoF per hand).
     LEFT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     RIGHT_OPEN_Q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
@@ -289,6 +299,12 @@ class Dex3BinaryController:
         self.left_pub.Init()
         self.right_pub = ChannelPublisher("rt/dex3/right/cmd", HandCmd_)
         self.right_pub.Init()
+        self.left_state_sub = ChannelSubscriber("rt/dex3/left/state", HandState_)
+        self.left_state_sub.Init()
+        self.right_state_sub = ChannelSubscriber("rt/dex3/right/state", HandState_)
+        self.right_state_sub.Init()
+        self.left_state_q = np.zeros(7, dtype=np.float32)
+        self.right_state_q = np.zeros(7, dtype=np.float32)
 
         self.left_msg = unitree_hg_msg_dds__HandCmd_()
         self.right_msg = unitree_hg_msg_dds__HandCmd_()
@@ -311,12 +327,41 @@ class Dex3BinaryController:
             msg.motor_cmd[joint_id].kp = kp
             msg.motor_cmd[joint_id].kd = kd
 
+    @classmethod
+    def _adaptive_pd_from_error(cls, abs_err):
+        if abs_err <= cls.ERR_SMALL_RAD:
+            return cls.KP_HIGH, cls.KD_HIGH
+        if abs_err >= cls.ERR_LARGE_RAD:
+            return cls.KP_LOW, cls.KD_LOW
+        span = cls.ERR_LARGE_RAD - cls.ERR_SMALL_RAD
+        alpha = (abs_err - cls.ERR_SMALL_RAD) / span
+        kp = cls.KP_HIGH + (cls.KP_LOW - cls.KP_HIGH) * alpha
+        kd = cls.KD_HIGH + (cls.KD_LOW - cls.KD_HIGH) * alpha
+        return kp, kd
+
+    def _refresh_state(self):
+        left_msg = self.left_state_sub.Read()
+        right_msg = self.right_state_sub.Read()
+        if left_msg is not None:
+            self.left_state_q = np.array([left_msg.motor_state[i].q for i in range(7)], dtype=np.float32)
+        if right_msg is not None:
+            self.right_state_q = np.array([right_msg.motor_state[i].q for i in range(7)], dtype=np.float32)
+
     def ctrl_binary(self, left_close, right_close):
         left_target = self.LEFT_CLOSE_Q if left_close >= 0.5 else self.LEFT_OPEN_Q
         right_target = self.RIGHT_CLOSE_Q if right_close >= 0.5 else self.RIGHT_OPEN_Q
+        self._refresh_state()
         for joint_id in range(7):
             self.left_msg.motor_cmd[joint_id].q = float(left_target[joint_id])
             self.right_msg.motor_cmd[joint_id].q = float(right_target[joint_id])
+            left_err = abs(float(left_target[joint_id]) - float(self.left_state_q[joint_id]))
+            right_err = abs(float(right_target[joint_id]) - float(self.right_state_q[joint_id]))
+            left_kp, left_kd = self._adaptive_pd_from_error(left_err)
+            right_kp, right_kd = self._adaptive_pd_from_error(right_err)
+            self.left_msg.motor_cmd[joint_id].kp = left_kp
+            self.left_msg.motor_cmd[joint_id].kd = left_kd
+            self.right_msg.motor_cmd[joint_id].kp = right_kp
+            self.right_msg.motor_cmd[joint_id].kd = right_kd
         self.left_pub.Write(self.left_msg)
         self.right_pub.Write(self.right_msg)
 

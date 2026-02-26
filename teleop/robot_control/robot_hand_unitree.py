@@ -32,6 +32,16 @@ kTopicDex3RightState = "rt/dex3/right/state"
 
 
 class Dex3_1_Controller:
+    # Contact-aware adaptive gains:
+    # - small tracking error: use stronger gains for responsive free-space motion
+    # - large tracking error: reduce gains to avoid heating when blocked by rigid contact
+    KP_HIGH = 1.5
+    KD_HIGH = 0.2
+    KP_LOW = 0.55
+    KD_LOW = 0.08
+    ERR_SMALL_RAD = 0.08
+    ERR_LARGE_RAD = 0.45
+
     def __init__(self, left_hand_array_in, right_hand_array_in, dual_hand_data_lock = None, dual_hand_state_array_out = None,
                        dual_hand_action_array_out = None, fps = 100.0, Unit_Test = False, simulation_mode = False,
                        dds_already_initialized = False):
@@ -142,6 +152,22 @@ class Dex3_1_Controller:
             self.motor_mode |= (self.timeout & 0x01) << 7
             return self.motor_mode
 
+    @classmethod
+    def _adaptive_pd_from_error(cls, abs_err):
+        """
+        Piecewise-linear gain scheduling by position error magnitude.
+        """
+        if abs_err <= cls.ERR_SMALL_RAD:
+            return cls.KP_HIGH, cls.KD_HIGH
+        if abs_err >= cls.ERR_LARGE_RAD:
+            return cls.KP_LOW, cls.KD_LOW
+
+        span = cls.ERR_LARGE_RAD - cls.ERR_SMALL_RAD
+        alpha = (abs_err - cls.ERR_SMALL_RAD) / span
+        kp = cls.KP_HIGH + (cls.KP_LOW - cls.KP_HIGH) * alpha
+        kd = cls.KD_HIGH + (cls.KD_LOW - cls.KD_HIGH) * alpha
+        return kp, kd
+
     def ctrl_dual_hand(self, left_q_target, right_q_target):
         """set current left, right hand motor state target q"""
         for idx, id in enumerate(Dex3_1_Left_JointIndex):
@@ -163,8 +189,8 @@ class Dex3_1_Controller:
         q = 0.0
         dq = 0.0
         tau = 0.0
-        kp = 1.5
-        kd = 0.2
+        kp = self.KP_HIGH
+        kd = self.KD_HIGH
 
         # initialize dex3-1's left hand cmd msg
         self.left_msg  = unitree_hg_msg_dds__HandCmd_()
@@ -200,7 +226,9 @@ class Dex3_1_Controller:
                     right_hand_data = np.array(right_hand_array_in[:]).reshape(25, 3).copy()
 
                 # Read left and right q_state from shared arrays
-                state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
+                left_state = np.array(left_hand_state_array[:], dtype=np.float64)
+                right_state = np.array(right_hand_state_array[:], dtype=np.float64)
+                state_data = np.concatenate((left_state, right_state))
 
                 if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
                     ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
@@ -215,6 +243,17 @@ class Dex3_1_Controller:
                     with dual_hand_data_lock:
                         dual_hand_state_array_out[:] = state_data
                         dual_hand_action_array_out[:] = action_data
+
+                for idx, id in enumerate(Dex3_1_Left_JointIndex):
+                    abs_err = abs(float(left_q_target[idx]) - float(left_state[idx]))
+                    gain_kp, gain_kd = self._adaptive_pd_from_error(abs_err)
+                    self.left_msg.motor_cmd[id].kp = gain_kp
+                    self.left_msg.motor_cmd[id].kd = gain_kd
+                for idx, id in enumerate(Dex3_1_Right_JointIndex):
+                    abs_err = abs(float(right_q_target[idx]) - float(right_state[idx]))
+                    gain_kp, gain_kd = self._adaptive_pd_from_error(abs_err)
+                    self.right_msg.motor_cmd[id].kp = gain_kp
+                    self.right_msg.motor_cmd[id].kd = gain_kd
 
                 self.ctrl_dual_hand(left_q_target, right_q_target)
                 current_time = time.time()
