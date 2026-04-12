@@ -9,7 +9,8 @@ import logging_mp
 logger_mp = logging_mp.get_logger(__name__)
 
 class ImageClient:
-    def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None, 
+    def __init__(self, tv_img_shape = None, tv_img_shm_name = None, wrist_img_shape = None, wrist_img_shm_name = None,
+                       wide_img_shape = None, wide_img_shm_name = None,
                        image_show = False, server_address = "192.168.123.164", port = 5555, Unit_Test = False, debug = False):
         """
         tv_img_shape: User's expected head camera resolution shape (H, W, C). It should match the output of the image service terminal.
@@ -19,6 +20,9 @@ class ImageClient:
         wrist_img_shape: User's expected wrist camera resolution shape (H, W, C). It should maintain the same shape as tv_img_shape.
 
         wrist_img_shm_name: Shared memory is used to easily transfer images.
+
+        wide_img_shape / wide_img_shm_name: Optional second panel when the robot streams head|wide in one JPEG
+        (image_server.py hconcat). Columns [tv_width : tv_width + wide_width] are copied here; tv columns stay [0:tv_width].
         
         image_show: Whether to display received images in real time.
 
@@ -51,6 +55,13 @@ class ImageClient:
             self.wrist_image_shm = shared_memory.SharedMemory(name=wrist_img_shm_name)
             self.wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = self.wrist_image_shm.buf)
             self.wrist_enable_shm = True
+
+        self.wide_img_shape = wide_img_shape
+        self.wide_enable_shm = False
+        if self.wide_img_shape is not None and wide_img_shm_name is not None:
+            self.wide_image_shm = shared_memory.SharedMemory(name=wide_img_shm_name)
+            self.wide_img_array = np.ndarray(wide_img_shape, dtype=np.uint8, buffer=self.wide_image_shm.buf)
+            self.wide_enable_shm = True
 
         # Performance evaluation parameters
         self._enable_performance_eval = Unit_Test
@@ -163,7 +174,31 @@ class ImageClient:
         
         if self.wrist_enable_shm:
             np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1]:]))
-        
+
+        if self.wide_enable_shm:
+            x0 = self.tv_img_shape[1]
+            x1 = x0 + self.wide_img_shape[1]
+            if current_image.shape[1] < x1:
+                if not hasattr(self, "_wide_shape_warned"):
+                    self._wide_shape_warned = True
+                    logger_mp.warning(
+                        "[Image Client] Stitched frame width %s < head+wide (%s); wide SHM not updated",
+                        current_image.shape[1],
+                        x1,
+                    )
+            else:
+                sl = current_image[:, x0:x1]
+                if sl.shape[0] != self.wide_img_shape[0] or sl.shape[1] != self.wide_img_shape[1]:
+                    if not hasattr(self, "_wide_shape_warned"):
+                        self._wide_shape_warned = True
+                        logger_mp.warning(
+                            "[Image Client] Wide crop shape %s != wide_img_shape %s; wide SHM not updated",
+                            sl.shape,
+                            self.wide_img_shape,
+                        )
+                else:
+                    np.copyto(self.wide_img_array, np.ascontiguousarray(sl))
+
         if self._image_show:
             height, width = current_image.shape[:2]
             resized_image = cv2.resize(current_image, (width // 2, height // 2))

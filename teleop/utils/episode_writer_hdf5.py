@@ -9,7 +9,8 @@ File structure:
     qpos: [T, N_joints] - joint positions (arm + hand + waist_yaw for G1)
     qvel: [T, N_joints] - joint velocities
     images/
-        ego_cam: [T, H, W, 3] - RGB images
+        ego_cam: [T, H, W, 3] - RGB images (head / XR panel)
+        wide_cam: [T, H, W, 3] - optional second robot camera when image_server sends head|wide
         cam_low: [T, H, W, 3]
         cam_left_wrist: [T, H, W, 3]
         cam_right_wrist: [T, H, W, 3]

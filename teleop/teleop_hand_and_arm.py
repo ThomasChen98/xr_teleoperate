@@ -470,13 +470,15 @@ if __name__ == '__main__':
         use_franka16_binary and args.xr_mode == "controller" and args.ee == "dex3"
     )
 
-    # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
-    # Image config - head camera only (no wrist cameras)
+    # image client: img_config should match image_server.py on the robot (resolution / stitch order).
+    # When the server sends head|wide (hconcat), set wide_camera_image_shape to the wide panel [H, W]
+    # so the client fills wide_img_shm and HDF5 gets both ego_cam and wide_cam.
     img_config = {
         'fps': 30,
         'head_camera_type': 'realsense',
-        'head_camera_image_shape': [480, 640],  # Head camera resolution
+        'head_camera_image_shape': [480, 640],  # head panel [H, W]
         'head_camera_id_numbers': [0],
+        'wide_camera_image_shape': [480, 640],  # wide panel [H, W]; omit if image_server sends head only
     }
 
 
@@ -489,6 +491,13 @@ if __name__ == '__main__':
         WRIST = True
     else:
         WRIST = False
+
+    if WRIST and img_config.get('wide_camera_image_shape'):
+        raise ValueError(
+            "img_config cannot combine wrist_camera_* with wide_camera_image_shape "
+            "(different ZMQ stripe layouts)."
+        )
+    HAS_WIDE = bool(img_config.get('wide_camera_image_shape')) and not WRIST
     
     if BINOCULAR and not (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
         tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1] * 2, 3)
@@ -506,6 +515,15 @@ if __name__ == '__main__':
         wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
         wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
         wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
+
+    wide_img_shape = None
+    wide_img_shm = None
+    wide_img_array = None
+    if HAS_WIDE:
+        w_h, w_w = img_config['wide_camera_image_shape']
+        wide_img_shape = (w_h, w_w, 3)
+        wide_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(wide_img_shape) * np.uint8().itemsize)
+        wide_img_array = np.ndarray(wide_img_shape, dtype=np.uint8, buffer=wide_img_shm.buf)
     
     # NOTE: ImageClient will be created AFTER TeleVuerWrapper because:
     # - TeleVuerWrapper spawns a subprocess (fork)
@@ -533,21 +551,27 @@ if __name__ == '__main__':
 
     # NOW create ImageClient - AFTER TeleVuerWrapper fork, so ZMQ socket won't be corrupted
     logger_mp.info("Creating ImageClient (after TeleVuerWrapper fork for ZMQ safety)...")
-    if WRIST and args.sim:
-        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name,
-                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name, 
-                                 server_address="127.0.0.1", debug=args.debug)
-    elif WRIST and not args.sim:
-        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name,
-                                 wrist_img_shape=wrist_img_shape, wrist_img_shm_name=wrist_img_shm.name, 
-                                 debug=args.debug)
-    else:
-        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name, debug=args.debug)
+    _img_client_kwargs = {
+        "tv_img_shape": tv_img_shape,
+        "tv_img_shm_name": tv_img_shm.name,
+        "debug": args.debug,
+    }
+    if WRIST:
+        _img_client_kwargs["wrist_img_shape"] = wrist_img_shape
+        _img_client_kwargs["wrist_img_shm_name"] = wrist_img_shm.name
+    if HAS_WIDE:
+        _img_client_kwargs["wide_img_shape"] = wide_img_shape
+        _img_client_kwargs["wide_img_shm_name"] = wide_img_shm.name
+    if args.sim:
+        _img_client_kwargs["server_address"] = "127.0.0.1"
+    img_client = ImageClient(**_img_client_kwargs)
     
     # Start image receive thread immediately after ImageClient creation
     image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
     image_receive_thread.start()
     logger_mp.info("Image receive thread started")
+    if HAS_WIDE:
+        logger_mp.info("Wide camera strip enabled: HDF5 will store observations/images/wide_cam alongside ego_cam")
 
     # arm
     if args.arm == "G1_29":
@@ -997,7 +1021,10 @@ if __name__ == '__main__':
                     current_wrist_image = wrist_img_array.copy()
                     images["cam_left_wrist"] = current_wrist_image[:, :wrist_img_shape[1]//2].copy()
                     images["cam_right_wrist"] = current_wrist_image[:, wrist_img_shape[1]//2:].copy()
-                
+
+                if HAS_WIDE:
+                    images["wide_cam"] = wide_img_array.copy()
+
                 # Add timestep to HDF5 episode
                 recorder.add_timestep(
                     qpos=full_qpos,
@@ -1082,6 +1109,13 @@ if __name__ == '__main__':
                 wrist_img_shm.unlink()
             except Exception as e:
                 logger_mp.warning(f"[CLEANUP] Failed to cleanup wrist_img_shm: {e}")
+
+        if HAS_WIDE:
+            try:
+                wide_img_shm.close()
+                wide_img_shm.unlink()
+            except Exception as e:
+                logger_mp.warning(f"[CLEANUP] Failed to cleanup wide_img_shm: {e}")
         
         # Wait for keyboard listener thread to finish (already signaled to stop earlier)
         try:
