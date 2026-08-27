@@ -435,7 +435,9 @@ if __name__ == '__main__':
 
     # inspire hand bridge parameters (for laptop-connected hands)
     parser.add_argument('--inspire-bridge', action='store_true', help='Use bridge mode for Inspire hands (hands connected to laptop via network)')
-    parser.add_argument('--network-interface', type=str, default='eno1', help='Network interface for hand bridge (e.g., eno1, eth0, wlan0)')
+    parser.add_argument('--network-interface', type=str, default=None,
+                        help='Network interface connected to the robot, used to bind DDS (e.g. eth0, eno1, enx00e04c3a0398). '
+                             'If omitted, DDS auto-detects an interface, which often picks the wrong NIC on machines with Wi-Fi.')
     parser.add_argument('--left-hand-ip', type=str, default='192.168.123.211', help='IP address of left Inspire hand')
     parser.add_argument('--right-hand-ip', type=str, default='192.168.123.210', help='IP address of right Inspire hand')
     
@@ -462,12 +464,16 @@ if __name__ == '__main__':
     logger_mp.info(f"args: {args}")
     if args.grasp_open_threshold >= args.grasp_close_threshold:
         raise ValueError("grasp-open-threshold must be < grasp-close-threshold")
+    if args.inspire_bridge and not args.network_interface:
+        parser.error("--inspire-bridge requires --network-interface (the NIC the hands are wired to, e.g. eno1)")
 
     use_franka16_binary = args.save_layout == 'franka16_binary'
     left_grasp_binary = 0.0
     right_grasp_binary = 0.0
+    # How the hands are driven depends only on the input device and end effector.
+    # --save-layout selects how episodes are recorded and must not gate control.
     use_dex3_binary_controller = bool(
-        use_franka16_binary and args.xr_mode == "controller" and args.ee == "dex3"
+        args.xr_mode == "controller" and args.ee == "dex3"
     )
 
     # image client: img_config should match image_server.py on the robot (resolution / stitch order).
@@ -532,18 +538,20 @@ if __name__ == '__main__':
     img_client = None
     image_receive_thread = None
 
-    # Initialize DDS with network interface if using inspire bridge mode
-    # This MUST be done before creating arm controller to ensure correct network interface
-    dds_already_initialized = False
-    if args.ee == "inspire1" and args.inspire_bridge:
-        from unitree_sdk2py.core.channel import ChannelFactoryInitialize
-        logger_mp.info(f"Initializing DDS with network interface: {args.network_interface}")
-        if args.sim:
-            ChannelFactoryInitialize(1, args.network_interface)
-        else:
-            ChannelFactoryInitialize(0, args.network_interface)
-        logger_mp.info("DDS initialized with network interface for hand bridge")
-        dds_already_initialized = True
+    # Initialize DDS up front so every controller shares one domain bound to the same NIC.
+    # ChannelFactory is a singleton, so this first call determines the interface for the
+    # arm and end-effector controllers created below.
+    from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+    dds_domain_id = 1 if args.sim else 0
+    if args.network_interface:
+        logger_mp.info(f"Initializing DDS on domain {dds_domain_id}, interface: {args.network_interface}")
+        ChannelFactoryInitialize(dds_domain_id, args.network_interface)
+    else:
+        logger_mp.warning(f"Initializing DDS on domain {dds_domain_id} with auto-detected interface. "
+                          f"If startup hangs waiting for DDS, pass --network-interface <nic> "
+                          f"with the NIC connected to the robot.")
+        ChannelFactoryInitialize(dds_domain_id)
+    dds_already_initialized = True
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
     tv_wrapper = TeleVuerWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == "hand", img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
@@ -576,16 +584,16 @@ if __name__ == '__main__':
     # arm
     if args.arm == "G1_29":
         arm_ik = G1_29_ArmIK()
-        arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
+        arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim, dds_already_initialized=dds_already_initialized)
     elif args.arm == "G1_23":
         arm_ik = G1_23_ArmIK()
-        arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
+        arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim, dds_already_initialized=dds_already_initialized)
     elif args.arm == "H1_2":
         arm_ik = H1_2_ArmIK()
-        arm_ctrl = H1_2_ArmController(simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
+        arm_ctrl = H1_2_ArmController(simulation_mode=args.sim, dds_already_initialized=dds_already_initialized)
     elif args.arm == "H1":
         arm_ik = H1_ArmIK()
-        arm_ctrl = H1_ArmController(simulation_mode=args.sim, dds_already_initialized=args.inspire_bridge)
+        arm_ctrl = H1_ArmController(simulation_mode=args.sim, dds_already_initialized=dds_already_initialized)
 
     # Get reset pose for this robot type (arms forward at chest height)
     reset_left_wrist_pose, reset_right_wrist_pose = get_reset_wrist_poses(args.arm)
@@ -737,6 +745,7 @@ if __name__ == '__main__':
         while not start_signal:
             time.sleep(0.01)
         arm_ctrl.speed_gradual_max()
+        prev_right_bButton = False  # for rising-edge detection on the record toggle
         while running:
             start_time = time.time()
 
@@ -820,6 +829,14 @@ if __name__ == '__main__':
             
             # get input data
             tele_data = tv_wrapper.get_motion_state_data()
+
+            # Right B toggles recording, mirroring the 's' key. Only the rising edge
+            # counts, otherwise holding the button would toggle on every frame.
+            if args.xr_mode == "controller" and args.record:
+                if tele_data.tele_state.right_bButton and not prev_right_bButton:
+                    should_toggle_recording = True
+                    logger_mp.info("Record toggle signal received (right B button)")
+                prev_right_bButton = tele_data.tele_state.right_bButton
             
             # Debug: confirm VR poses received from headset
             if args.debug:
@@ -849,10 +866,11 @@ if __name__ == '__main__':
                     left_signal = float(tele_data.left_pinch_value)
                     right_signal = float(tele_data.right_pinch_value)
                 else:
-                    # On some controller stacks trigger is reported high at rest.
-                    # Invert so: not pressed -> open, pressed -> close.
-                    left_signal = 1.0 - float(tele_data.left_trigger_value)
-                    right_signal = 1.0 - float(tele_data.right_trigger_value)
+                    # tele_data reports trigger depth as 10.0 (released) -> 0.0 (fully
+                    # pressed). Normalize to 0.0 (released) -> 1.0 (pressed) so the
+                    # open/close thresholds apply over the full trigger travel.
+                    left_signal = 1.0 - float(tele_data.left_trigger_value) / 10.0
+                    right_signal = 1.0 - float(tele_data.right_trigger_value) / 10.0
 
                 left_grasp_binary = update_binary_grasp(
                     left_signal,
